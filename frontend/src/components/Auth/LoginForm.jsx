@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { authApi } from '../../services/api'
 import useAuthStore from '../../store/authStore'
 
@@ -18,7 +18,8 @@ export default function LoginForm() {
     try {
       const { data } = await authApi.login({ username, password })
       setToken(data.access_token)
-      setUser({ username })
+      // user bilgisi login response'ından direkt gelir (role dahil)
+      setUser({ id: data.user.id, username: data.user.username, role: data.user.role })
       navigate('/')
     } catch {
       setError('Kullanıcı adı veya şifre hatalı.')
@@ -58,6 +59,11 @@ export default function LoginForm() {
       >
         {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
       </button>
+      <p className="text-center text-sm text-gray-500">
+        <Link to="/forgot-password" className="text-blue-600 hover:underline">
+          Şifremi Unuttum
+        </Link>
+      </p>
     </form>
   )
 }

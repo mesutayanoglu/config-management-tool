@@ -79,7 +79,12 @@ export default function ConfigsPage() {
     setLoading(true)
     setPanelMode('comparing')
     try {
-      const { data } = await configsApi.compare(selectedDevice.device_uid, viewedCommit.sha, sha)
+      const dateViewed = new Date(commits.find(c => c.sha === viewedCommit.sha)?.date ?? 0)
+      const datePicked = new Date(commits.find(c => c.sha === sha)?.date ?? 0)
+      const [olderSha, newerSha] = dateViewed <= datePicked
+        ? [viewedCommit.sha, sha]
+        : [sha, viewedCommit.sha]
+      const { data } = await configsApi.compare(selectedDevice.device_uid, olderSha, newerSha)
       setCompareCommit({ sha })
       setDiffData({ contentA: data.content_a, contentB: data.content_b, shaA: data.sha_a, shaB: data.sha_b })
     } finally {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { schedulersApi } from '../services/api'
 import { useLanguage } from '../i18n'
+import useAuthStore from '../store/authStore'
 import SchedulerForm from '../components/Schedulers/SchedulerForm'
 import SchedulerEditModal from '../components/Schedulers/SchedulerEditModal'
 import ConfirmModal from '../components/ConfirmModal'
@@ -39,6 +40,7 @@ const tdCls = 'px-4 py-3 text-sm text-gray-700'
 
 export default function SchedulersPage() {
   const { t } = useLanguage()
+  const { isReadOnly } = useAuthStore()
   const describeSchedule = useScheduleLabel(t)
 
   const [schedulers, setSchedulers] = useState([])
@@ -91,12 +93,14 @@ export default function SchedulersPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">{t('schedulers.title')}</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
-        >
-          {t('schedulers.addButton')}
-        </button>
+        {!isReadOnly() && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+          >
+            {t('schedulers.addButton')}
+          </button>
+        )}
       </div>
 
       {/* Inline create form */}
@@ -165,20 +169,22 @@ export default function SchedulersPage() {
                     </span>
                   </td>
                   <td className={`${tdCls} text-right`}>
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setEditingScheduler(s)}
-                        className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
-                      >
-                        {t('common.edit')}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(s)}
-                        className="text-xs border border-red-200 text-red-500 px-3 py-1.5 rounded-md hover:bg-red-50 transition-colors"
-                      >
-                        {t('common.delete')}
-                      </button>
-                    </div>
+                    {!isReadOnly() && (
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setEditingScheduler(s)}
+                          className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors"
+                        >
+                          {t('common.edit')}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(s)}
+                          className="text-xs border border-red-200 text-red-500 px-3 py-1.5 rounded-md hover:bg-red-50 transition-colors"
+                        >
+                          {t('common.delete')}
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

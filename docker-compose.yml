@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   backend:
     build: ./backend
@@ -12,26 +10,6 @@ services:
     volumes:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  celery_worker:
-    build: ./backend
-    env_file: .env
-    depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ./backend:/app
-    command: celery -A app.tasks.celery_app worker --loglevel=info
-
-  celery_beat:
-    build: ./backend
-    env_file: .env
-    depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ./backend:/app
-    command: celery -A app.tasks.celery_app beat --loglevel=info
 
   frontend:
     build: ./frontend

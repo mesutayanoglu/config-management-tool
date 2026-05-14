@@ -9,6 +9,8 @@ import ConfigsPage from './pages/ConfigsPage'
 import SchedulersPage from './pages/SchedulersPage'
 import OrganizationsPage from './pages/OrganizationsPage'
 import SettingsPage from './pages/SettingsPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import Sidebar from './components/Layout/Sidebar'
 import Navbar from './components/Layout/Navbar'
 
@@ -35,6 +37,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
           path="/"
           element={

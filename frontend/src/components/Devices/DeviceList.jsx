@@ -1,6 +1,6 @@
 import { useLanguage } from '../../i18n'
 
-export default function DeviceList({ devices, onCollect, onDelete, onEdit, collectingIds }) {
+export default function DeviceList({ devices, onCollect, onDelete, onEdit, collectingIds, readOnly = false }) {
   const { t } = useLanguage()
 
   const statusConfig = {
@@ -64,53 +64,59 @@ export default function DeviceList({ devices, onCollect, onDelete, onEdit, colle
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onCollect(d.id)}
-                      disabled={isCollecting}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors
-                        ${isCollecting
-                          ? 'border-blue-200 bg-blue-50 text-blue-400 cursor-not-allowed'
-                          : 'border-blue-300 bg-white text-blue-600 hover:bg-blue-50'}`}
-                    >
-                      {isCollecting ? (
-                        <>
-                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                          </svg>
-                          {t('deviceList.btn.fetching')}
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                          {t('deviceList.btn.getConfig')}
-                        </>
-                      )}
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => onCollect(d.id)}
+                        disabled={isCollecting}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors
+                          ${isCollecting
+                            ? 'border-blue-200 bg-blue-50 text-blue-400 cursor-not-allowed'
+                            : 'border-blue-300 bg-white text-blue-600 hover:bg-blue-50'}`}
+                      >
+                        {isCollecting ? (
+                          <>
+                            <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                            </svg>
+                            {t('deviceList.btn.fetching')}
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            {t('deviceList.btn.getConfig')}
+                          </>
+                        )}
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() => onEdit(d)}
-                      disabled={isCollecting}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                    >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      {t('common.edit')}
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => onEdit(d)}
+                        disabled={isCollecting}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        {t('common.edit')}
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() => onDelete(d.id)}
-                      disabled={isCollecting}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border border-red-200 bg-white text-red-500 hover:bg-red-50 disabled:opacity-40 transition-colors"
-                    >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      {t('common.delete')}
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => onDelete(d.id)}
+                        disabled={isCollecting}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border border-red-200 bg-white text-red-500 hover:bg-red-50 disabled:opacity-40 transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        {t('common.delete')}
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

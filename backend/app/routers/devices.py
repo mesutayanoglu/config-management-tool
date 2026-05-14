@@ -2,13 +2,16 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.security import get_current_user, get_write_user
 from app.models.device import Device
 from app.models.organization import Site, Organization  # modellerin kayıt sırası için
+from app.models.user import User
 from app.schemas.device import DeviceCreate, DeviceOut, DeviceUpdate
 from app.services.ping_service import ping_device
 from app.services.ssh_collector import collect_config
@@ -48,13 +51,20 @@ def _with_relations():
 
 
 @router.get("/", response_model=list[DeviceOut])
-async def list_devices(db: AsyncSession = Depends(get_db)):
+async def list_devices(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
     result = await db.execute(_with_relations())
     return [_device_out(d) for d in result.scalars().all()]
 
 
 @router.get("/{device_id}", response_model=DeviceOut)
-async def get_device(device_id: int, db: AsyncSession = Depends(get_db)):
+async def get_device(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
     result = await db.execute(_with_relations().where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:
@@ -63,7 +73,11 @@ async def get_device(device_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
-async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
+async def create_device(
+    body: DeviceCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_write_user),
+):
     device = Device(**body.model_dump(), device_uid=uuid.uuid4().hex[:12])
     db.add(device)
     await db.commit()
@@ -72,7 +86,12 @@ async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
-async def update_device(device_id: int, body: DeviceUpdate, db: AsyncSession = Depends(get_db)):
+async def update_device(
+    device_id: int,
+    body: DeviceUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_write_user),
+):
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:
@@ -85,17 +104,32 @@ async def update_device(device_id: int, body: DeviceUpdate, db: AsyncSession = D
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_device(device_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_device(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_write_user),
+):
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cihaz bulunamadı")
-    await db.delete(device)
-    await db.commit()
+    try:
+        await db.delete(device)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="scheduler_conflict",
+        )
 
 
 @router.post("/{device_id}/ping")
-async def ping(device_id: int, db: AsyncSession = Depends(get_db)):
+async def ping(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:
@@ -107,7 +141,11 @@ async def ping(device_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{device_id}/collect")
-async def collect(device_id: int, db: AsyncSession = Depends(get_db)):
+async def collect(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_write_user),
+):
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
     if not device:

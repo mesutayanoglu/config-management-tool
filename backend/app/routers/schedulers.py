@@ -4,7 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.security import get_current_user, get_write_user
 from app.models.scheduler import Scheduler, SchedulerDevice
+from app.models.user import User
 from app.schemas.scheduler import (
     DeviceBrief,
     SchedulerCreate,
@@ -59,7 +61,10 @@ async def _load(scheduler_id: int, db: AsyncSession) -> Scheduler:
 
 
 @router.get("/", response_model=list[SchedulerOut])
-async def list_schedulers(db: AsyncSession = Depends(get_db)):
+async def list_schedulers(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
     result = await db.execute(
         select(Scheduler).options(
             selectinload(Scheduler.scheduler_devices).selectinload(SchedulerDevice.device),
@@ -71,7 +76,11 @@ async def list_schedulers(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/", response_model=SchedulerOut, status_code=status.HTTP_201_CREATED)
-async def create_scheduler(body: SchedulerCreate, db: AsyncSession = Depends(get_db)):
+async def create_scheduler(
+    body: SchedulerCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_write_user),
+):
     scheduler = Scheduler(
         name=body.name,
         schedule_type=body.schedule_type,
@@ -99,7 +108,10 @@ async def create_scheduler(body: SchedulerCreate, db: AsyncSession = Depends(get
 
 @router.patch("/{scheduler_id}", response_model=SchedulerOut)
 async def update_scheduler(
-    scheduler_id: int, body: SchedulerUpdate, db: AsyncSession = Depends(get_db)
+    scheduler_id: int,
+    body: SchedulerUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_write_user),
 ):
     s = await _load(scheduler_id, db)
 
@@ -121,7 +133,11 @@ async def update_scheduler(
 
 
 @router.delete("/{scheduler_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_scheduler(scheduler_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_scheduler(
+    scheduler_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_write_user),
+):
     s = await _load(scheduler_id, db)
     job_scheduler.unregister(scheduler_id)
     await db.delete(s)

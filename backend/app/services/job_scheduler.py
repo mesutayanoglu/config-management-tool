@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -94,7 +95,7 @@ async def _run_job(scheduler_id: int):
                 except Exception as exc:
                     logger.warning("[Scheduler:%s] FAIL — %s: %s", s.name, device.hostname, exc)
 
-            s.last_run_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            s.last_run_at = datetime.now(ZoneInfo("Europe/Istanbul")).replace(tzinfo=None)
             await db.commit()
 
     except Exception as exc:

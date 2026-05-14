@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { organizationsApi } from '../services/api'
 import { useLanguage } from '../i18n'
+import useAuthStore from '../store/authStore'
 import ConfirmModal from '../components/ConfirmModal'
 
 export default function OrganizationsPage() {
   const { t } = useLanguage()
+  const { isReadOnly } = useAuthStore()
   const [orgs, setOrgs] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -104,12 +106,14 @@ export default function OrganizationsPage() {
           <h1 className="text-2xl font-bold text-gray-800">{t('orgs.title')}</h1>
           <p className="text-sm text-gray-500 mt-1">{t('orgs.subtitle')}</p>
         </div>
-        <button
-          onClick={() => { setShowOrgForm(true); setOrgError('') }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
-        >
-          {t('orgs.addButton')}
-        </button>
+        {!isReadOnly() && (
+          <button
+            onClick={() => { setShowOrgForm(true); setOrgError('') }}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+          >
+            {t('orgs.addButton')}
+          </button>
+        )}
       </div>
 
       {showOrgForm && (
@@ -177,10 +181,12 @@ export default function OrganizationsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-gray-400">{org.sites?.length || 0} {t('orgs.branches')}</span>
-                  <button onClick={() => askDeleteOrg(org)}
-                    className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors">
-                    {t('common.delete')}
-                  </button>
+                  {!isReadOnly() && (
+                    <button onClick={() => askDeleteOrg(org)}
+                      className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors">
+                      {t('common.delete')}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -196,14 +202,16 @@ export default function OrganizationsPage() {
                         {site.location && <p className="text-xs text-gray-400">{site.location}</p>}
                       </div>
                     </div>
-                    <button onClick={() => askDeleteSube(org, site)}
-                      className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors">
-                      {t('common.delete')}
-                    </button>
+                    {!isReadOnly() && (
+                      <button onClick={() => askDeleteSube(org, site)}
+                        className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors">
+                        {t('common.delete')}
+                      </button>
+                    )}
                   </div>
                 ))}
 
-                {subeFormOrgId === org.id ? (
+                {!isReadOnly() && (subeFormOrgId === org.id ? (
                   <div className="px-5 py-4 bg-blue-50 border-t border-blue-100">
                     <form onSubmit={(e) => handleCreateSube(e, org.id)} className="space-y-3">
                       <p className="text-xs font-semibold text-blue-700">{t('orgs.newBranch')}</p>
@@ -242,7 +250,7 @@ export default function OrganizationsPage() {
                       {t('orgs.addBranch')}
                     </button>
                   </div>
-                )}
+                ))}
               </div>
             </div>
           ))}

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { devicesApi } from '../services/api'
 import { useLanguage } from '../i18n'
+import useAuthStore from '../store/authStore'
 import DeviceList from '../components/Devices/DeviceList'
 import DeviceForm from '../components/Devices/DeviceForm'
 import DeviceEditModal from '../components/Devices/DeviceEditModal'
@@ -9,6 +10,7 @@ import ConfirmModal from '../components/ConfirmModal'
 
 export default function DevicesPage() {
   const { t } = useLanguage()
+  const { isReadOnly } = useAuthStore()
   const [devices, setDevices] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [toast, setToast] = useState(null)
@@ -85,9 +87,18 @@ export default function DevicesPage() {
       message: `"${name}" ${t('devices.confirm.deleteMsg')}`,
       onConfirm: async () => {
         setConfirm(null)
-        await devicesApi.remove(id)
-        loadDevices()
-        showToast(t('devices.toast.deleted'), 'info')
+        try {
+          await devicesApi.remove(id)
+          loadDevices()
+          showToast(t('devices.toast.deleted'), 'info')
+        } catch (err) {
+          const detail = err?.response?.data?.detail
+          if (detail === 'scheduler_conflict') {
+            showToast(t('devices.toast.deleteSchedulerError'), 'error')
+          } else {
+            showToast(detail || t('devices.toast.configFail'), 'error')
+          }
+        }
       },
     })
   }
@@ -103,12 +114,14 @@ export default function DevicesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">{t('devices.title')}</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
-        >
-          {t('devices.addButton')}
-        </button>
+        {!isReadOnly() && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+          >
+            {t('devices.addButton')}
+          </button>
+        )}
       </div>
 
       {showForm && (
@@ -125,6 +138,7 @@ export default function DevicesPage() {
           onDelete={handleDelete}
           onEdit={setEditingDevice}
           collectingIds={collectingIds}
+          readOnly={isReadOnly()}
         />
       </div>
 

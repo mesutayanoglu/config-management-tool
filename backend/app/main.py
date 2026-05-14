@@ -25,6 +25,19 @@ async def _load_settings_from_db():
             app_settings.GITHUB_TOKEN = row[1]
         elif row[0] == "GITHUB_REPO":
             app_settings.GITHUB_REPO = row[1]
+        elif row[0] == "SMTP_HOST":
+            app_settings.SMTP_HOST = row[1]
+        elif row[0] == "SMTP_PORT":
+            try:
+                app_settings.SMTP_PORT = int(row[1])
+            except ValueError:
+                pass
+        elif row[0] == "SMTP_USER":
+            app_settings.SMTP_USER = row[1]
+        elif row[0] == "SMTP_PASSWORD":
+            app_settings.SMTP_PASSWORD = row[1]
+        elif row[0] == "SMTP_FROM":
+            app_settings.SMTP_FROM = row[1]
 
 
 @asynccontextmanager

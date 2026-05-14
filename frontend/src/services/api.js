@@ -26,9 +26,15 @@ api.interceptors.response.use(
 
 export const authApi = {
   login: (credentials) => api.post('/auth/login', credentials),
-  register: (data) => api.post('/auth/register', data),
+  getMe: () => api.get('/auth/me'),
+  createUser: (data) => api.post('/auth/users', data),
   listUsers: () => api.get('/auth/users'),
   deleteUser: (id) => api.delete(`/auth/users/${id}`),
+  updateProfile: (id, data) => api.put(`/auth/users/${id}/profile`, data),
+  updatePassword: (id, data) => api.put(`/auth/users/${id}/password`, data),
+  updateRole: (id, data) => api.put(`/auth/users/${id}/role`, data),
+  forgotPassword: (data) => api.post('/auth/forgot-password', data),
+  resetPassword: (data) => api.post('/auth/reset-password', data),
 }
 
 export const devicesApi = {
@@ -69,6 +75,9 @@ export const settingsApi = {
   get: () => api.get('/settings/'),
   save: (data) => api.post('/settings/', data),
   testGithub: () => api.get('/settings/test-github'),
+  getSmtp: () => api.get('/settings/smtp'),
+  saveSmtp: (data) => api.post('/settings/smtp', data),
+  testSmtp: () => api.post('/settings/test-smtp'),
 }
 
 export default api

@@ -13,6 +13,7 @@ import app.models.user  # noqa
 import app.models.device  # noqa
 import app.models.organization  # noqa
 import app.models.scheduler  # noqa
+import app.models.password_reset_token  # noqa
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
