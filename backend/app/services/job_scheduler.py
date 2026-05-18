@@ -12,6 +12,7 @@ from app.core.database import AsyncSessionLocal
 from app.models.device import Device
 from app.models.organization import Site
 from app.models.scheduler import Scheduler, SchedulerDevice
+from app.services.email_service import send_scheduler_notification
 from app.services.ssh_collector import collect_config
 
 # Use WARNING so messages are always visible in uvicorn output
@@ -88,15 +89,34 @@ async def _run_job(scheduler_id: int):
 
             logger.warning("[Scheduler:%s] Running for %d device(s)", s.name, len(devices))
 
+            job_results = []
             for device in devices:
                 try:
                     await collect_config(device)
                     logger.warning("[Scheduler:%s] OK — %s", s.name, device.hostname)
+                    job_results.append({
+                        "hostname": device.hostname,
+                        "ip_address": device.ip_address,
+                        "status": device.status,
+                        "backup_ok": True,
+                    })
                 except Exception as exc:
                     logger.warning("[Scheduler:%s] FAIL — %s: %s", s.name, device.hostname, exc)
+                    job_results.append({
+                        "hostname": device.hostname,
+                        "ip_address": device.ip_address,
+                        "status": device.status,
+                        "backup_ok": False,
+                    })
 
+            run_at = datetime.now(ZoneInfo("Europe/Istanbul")).strftime("%d.%m.%Y %H:%M")
             s.last_run_at = datetime.now(ZoneInfo("Europe/Istanbul")).replace(tzinfo=None)
             await db.commit()
+
+            if s.notification_email and job_results:
+                await send_scheduler_notification(
+                    s.notification_email, s.name, run_at, job_results
+                )
 
     except Exception as exc:
         logger.warning("[Scheduler id=%d] Unexpected error: %s", scheduler_id, exc)

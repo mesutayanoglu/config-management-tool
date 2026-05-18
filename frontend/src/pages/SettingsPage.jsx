@@ -7,7 +7,7 @@ import ConfirmModal from '../components/ConfirmModal'
 
 export default function SettingsPage() {
   const { t } = useLanguage()
-  const { isSuperAdmin } = useAuthStore()
+  const { isSuperAdmin, isReadOnly } = useAuthStore()
   const [form, setForm] = useState({ github_token: '', github_repo: '' })
   const [saved, setSaved] = useState(null)
   const [toast, setToast] = useState(null)
@@ -25,7 +25,7 @@ export default function SettingsPage() {
       setForm({ github_token: '', github_repo: data.github_repo || '' })
     }).catch(() => {})
 
-    if (isSuperAdmin()) {
+    if (!isReadOnly()) {
       settingsApi.testGithub().then(({ data }) => {
         setRepoInfo(data)
         setTestResult('ok')
@@ -148,7 +148,7 @@ export default function SettingsPage() {
                       value={form.github_token}
                       onChange={(e) => { setForm((p) => ({ ...p, github_token: e.target.value })); setHasSaved(false) }}
                       placeholder={saved?.github_token === '***' ? t('settings.tokenPlaceholder') : 'ghp_xxxxxxxxxxxx'}
-                      disabled={!isSuperAdmin()}
+                      disabled={isReadOnly()}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
                     />
                   </div>
@@ -159,12 +159,12 @@ export default function SettingsPage() {
                       value={form.github_repo}
                       onChange={(e) => { setForm((p) => ({ ...p, github_repo: e.target.value })); setHasSaved(false) }}
                       placeholder="username/config-backups"
-                      disabled={!isSuperAdmin()}
+                      disabled={isReadOnly()}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
                     />
                     <p className="text-xs text-gray-400 mt-1">{t('settings.repoHint')}</p>
                   </div>
-                  {isSuperAdmin() && (
+                  {!isReadOnly() && (
                     <button
                       type="submit"
                       disabled={saving}
@@ -184,7 +184,7 @@ export default function SettingsPage() {
                     ? t('settings.step3NoConn')
                     : t('settings.step3HasConn')}
                 </p>
-                {isSuperAdmin() && (
+                {!isReadOnly() && (
                   <>
                     <button
                       type="button"
@@ -262,7 +262,7 @@ export default function SettingsPage() {
       </SectionCard>
 
       {/* ── Section 2: Email / SMTP ── */}
-      {isSuperAdmin() && (
+      {!isReadOnly() && (
         <SectionCard
           icon={
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -277,7 +277,7 @@ export default function SettingsPage() {
       )}
 
       {/* ── Section 3: Administrators ── */}
-      {isSuperAdmin() && (
+      {!isReadOnly() && (
         <SectionCard
           icon={
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -287,7 +287,7 @@ export default function SettingsPage() {
           title={t('settings.sectionAdministrators')}
           description="Kullanıcı hesapları ve erişim rol yönetimi"
         >
-          <AdministratorsSection setToast={setToast} t={t} />
+          <AdministratorsSection setToast={setToast} t={t} canManage={isSuperAdmin()} />
         </SectionCard>
       )}
 
@@ -514,7 +514,7 @@ const ROLE_BADGE_CLS = {
   read_only: 'bg-gray-100 text-gray-600',
 }
 
-function AdministratorsSection({ setToast, t }) {
+function AdministratorsSection({ setToast, t, canManage }) {
   const { user: currentUser } = useAuthStore()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -602,29 +602,31 @@ function AdministratorsSection({ setToast, t }) {
         <p className="text-xs text-gray-500">
           {loading ? t('common.loading') : `${users.length} kullanıcı`}
         </p>
-        <button
-          onClick={() => setShowCreate((v) => !v)}
-          className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${
-            showCreate
-              ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-        >
-          {showCreate ? (
-            t('common.cancel')
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              {t('settings.admin.addUser')}
-            </>
-          )}
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowCreate((v) => !v)}
+            className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${
+              showCreate
+                ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {showCreate ? (
+              t('common.cancel')
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                {t('settings.admin.addUser')}
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Create Form */}
-      {showCreate && (
+      {canManage && showCreate && (
         <div className="px-6 py-5 border-b border-gray-200 bg-gray-50">
           <p className="text-sm font-semibold text-gray-700 mb-4">{t('settings.admin.newUser')}</p>
           <form onSubmit={handleCreate} className="grid grid-cols-2 gap-3">
@@ -733,36 +735,44 @@ function AdministratorsSection({ setToast, t }) {
                   </div>
                 </td>
                 <td className="px-6 py-3.5">
-                  <select
-                    value={u.role}
-                    onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                    className={`text-xs font-semibold px-2.5 py-1 rounded-md border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${ROLE_BADGE_CLS[u.role] || 'bg-gray-100 text-gray-600'}`}
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>{t(`settings.admin.role.${r}`)}</option>
-                    ))}
-                  </select>
+                  {canManage ? (
+                    <select
+                      value={u.role}
+                      onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-md border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${ROLE_BADGE_CLS[u.role] || 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {ROLES.map((r) => (
+                        <option key={r} value={r}>{t(`settings.admin.role.${r}`)}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-md ${ROLE_BADGE_CLS[u.role] || 'bg-gray-100 text-gray-600'}`}>
+                      {t(`settings.admin.role.${u.role}`)}
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-3.5 text-gray-500 text-xs">
                   {u.email || <span className="text-gray-300">—</span>}
                 </td>
                 <td className="px-6 py-3.5">
-                  <div className="flex items-center gap-3 justify-end">
-                    <button
-                      onClick={() => { setPasswordModal({ userId: u.id, username: u.username }); setNewPassword('') }}
-                      className="text-xs text-gray-500 hover:text-blue-600 transition-colors font-medium"
-                    >
-                      {t('settings.admin.changePassword')}
-                    </button>
-                    {u.id !== currentUser?.id && (
+                  {canManage && (
+                    <div className="flex items-center gap-3 justify-end">
                       <button
-                        onClick={() => setDeleteConfirm({ id: u.id, username: u.username })}
-                        className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium"
+                        onClick={() => { setPasswordModal({ userId: u.id, username: u.username }); setNewPassword('') }}
+                        className="text-xs text-gray-500 hover:text-blue-600 transition-colors font-medium"
                       >
-                        {t('common.delete')}
+                        {t('settings.admin.changePassword')}
                       </button>
-                    )}
-                  </div>
+                      {u.id !== currentUser?.id && (
+                        <button
+                          onClick={() => setDeleteConfirm({ id: u.id, username: u.username })}
+                          className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium"
+                        >
+                          {t('common.delete')}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import (
     create_access_token, hash_password, verify_password,
-    get_current_user, get_super_admin_user,
+    get_admin_user, get_current_user, get_super_admin_user,
 )
 from app.models.user import User
 from app.models.password_reset_token import PasswordResetToken
@@ -70,7 +70,7 @@ async def create_user(
 @router.get("/users", response_model=list[UserOut])
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_super_admin_user),
+    _: User = Depends(get_admin_user),
 ):
     result = await db.execute(select(User))
     return result.scalars().all()

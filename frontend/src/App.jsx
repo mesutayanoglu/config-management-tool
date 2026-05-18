@@ -21,7 +21,7 @@ function PrivateRoute({ children }) {
 
 function AppLayout({ children }) {
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-slate-50">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Navbar />

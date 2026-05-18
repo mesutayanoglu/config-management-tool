@@ -2,20 +2,20 @@ import { useEffect, useState } from 'react'
 import { organizationsApi } from '../../services/api'
 import { useLanguage } from '../../i18n'
 
-const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba', 'aruba_cx']
+const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba']
 
-export default function DeviceEditModal({ device, onSave, onClose }) {
+export default function DeviceEditModal({ device, onSave, onClose, profiles = [], onOpenProfileManager }) {
   const { t } = useLanguage()
   const [form, setForm] = useState({
     hostname: device.hostname || '',
     ip_address: device.ip_address || '',
     vendor: device.vendor || 'cisco',
-    config_command: device.config_command || '',
     ssh_username: device.ssh_username || '',
     ssh_password: '',
     org_id: String(device.org_id || ''),
     site_id: String(device.site_id || ''),
   })
+  const [selectedProfileId, setSelectedProfileId] = useState('')
   const [orgs, setOrgs] = useState([])
   const [sites, setSites] = useState([])
   const [loadingSites, setLoadingSites] = useState(false)
@@ -38,6 +38,11 @@ export default function DeviceEditModal({ device, onSave, onClose }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
   function handleChange(e) {
     const { name, value } = e.target
     setForm((prev) => ({
@@ -54,6 +59,24 @@ export default function DeviceEditModal({ device, onSave, onClose }) {
     } else if (name === 'org_id') {
       setSites([])
     }
+    if (name === 'ssh_username' || name === 'ssh_password') {
+      setSelectedProfileId('')
+    }
+  }
+
+  function handleProfileSelect(e) {
+    const id = e.target.value
+    setSelectedProfileId(id)
+    if (id) {
+      const profile = profiles.find(p => p.id === id)
+      if (profile) {
+        setForm(prev => ({
+          ...prev,
+          ssh_username: profile.ssh_username,
+          ssh_password: profile.ssh_password,
+        }))
+      }
+    }
   }
 
   async function handleSubmit(e) {
@@ -65,7 +88,6 @@ export default function DeviceEditModal({ device, onSave, onClose }) {
         hostname: form.hostname,
         ip_address: form.ip_address,
         vendor: form.vendor,
-        config_command: form.config_command,
         ssh_username: form.ssh_username || null,
         site_id: form.site_id ? parseInt(form.site_id) : null,
       }
@@ -80,6 +102,7 @@ export default function DeviceEditModal({ device, onSave, onClose }) {
 
   const inputCls = 'w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
   const labelCls = 'block text-sm font-medium text-gray-700 mb-1'
+  const profileActive = !!selectedProfileId
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -130,28 +153,50 @@ export default function DeviceEditModal({ device, onSave, onClose }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>{t('deviceForm.brand')}</label>
-              <select name="vendor" value={form.vendor} onChange={handleChange} className={inputCls}>
-                {VENDORS.map((v) => <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>)}
-              </select>
+          <div>
+            <label className={labelCls}>{t('deviceForm.brand')}</label>
+            <select name="vendor" value={form.vendor} onChange={handleChange} className={inputCls}>
+              {VENDORS.map((v) => <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>)}
+            </select>
+          </div>
+
+          <hr className="border-gray-100" />
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium text-gray-700">{t('credProfiles.selectLabel')}</label>
+              {onOpenProfileManager && (
+                <button
+                  type="button" onClick={onOpenProfileManager}
+                  className="text-xs text-blue-600 hover:underline font-medium"
+                >
+                  {t('credProfiles.manage')}
+                </button>
+              )}
             </div>
-            <div>
-              <label className={labelCls}>{t('deviceForm.configCmd')}</label>
-              <input type="text" name="config_command" value={form.config_command} onChange={handleChange} className={inputCls} />
-            </div>
+            <select value={selectedProfileId} onChange={handleProfileSelect} className={inputCls}>
+              <option value="">— {t('credProfiles.selectPlaceholder')} —</option>
+              {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>{t('deviceForm.sshUser')}</label>
-              <input type="text" name="ssh_username" value={form.ssh_username} onChange={handleChange} className={inputCls} />
+              <input
+                type="text" name="ssh_username" value={form.ssh_username} onChange={handleChange}
+                disabled={profileActive}
+                className={`${inputCls} disabled:bg-gray-50 disabled:text-gray-400`}
+              />
             </div>
             <div>
               <label className={labelCls}>{t('deviceForm.sshPass')}</label>
-              <input type="password" name="ssh_password" value={form.ssh_password} onChange={handleChange}
-                placeholder={t('editModal.passwordPlaceholder')} className={inputCls} />
+              <input
+                type="password" name="ssh_password" value={form.ssh_password} onChange={handleChange}
+                disabled={profileActive}
+                placeholder={profileActive ? '••••••' : t('editModal.passwordPlaceholder')}
+                className={`${inputCls} disabled:bg-gray-50 disabled:text-gray-400`}
+              />
             </div>
           </div>
 

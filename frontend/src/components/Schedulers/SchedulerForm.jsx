@@ -55,6 +55,7 @@ export default function SchedulerForm({ initial = {}, onSubmit, onCancel, submit
   )
   const [dayOfMonth, setDayOfMonth] = useState(initial.day_of_month || 1)
 
+  const [notificationEmail, setNotificationEmail] = useState(initial.notification_email || '')
   const [selectedDeviceIds, setSelectedDeviceIds] = useState([])
   const [devices, setDevices] = useState([])
   const [orgs, setOrgs] = useState([])
@@ -102,6 +103,7 @@ export default function SchedulerForm({ initial = {}, onSubmit, onCancel, submit
         time_of_day: scheduleType !== 'interval' ? `${timeHour}:${timeMin}` : null,
         days_of_week: scheduleType === 'weekly' ? selectedDays.sort().join(',') : null,
         day_of_month: scheduleType === 'monthly' ? Number(dayOfMonth) : null,
+        notification_email: notificationEmail.trim() || null,
         ...target,
       }
       await onSubmit(payload)
@@ -240,6 +242,22 @@ export default function SchedulerForm({ initial = {}, onSubmit, onCancel, submit
           selectedIds={selectedDeviceIds}
           onChange={setSelectedDeviceIds}
         />
+      </div>
+
+      {/* Notification Email */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          {t('schedulers.form.notificationEmail')}
+          <span className="ml-1.5 text-xs font-normal text-gray-400">({t('common.optional')})</span>
+        </label>
+        <input
+          type="email"
+          value={notificationEmail}
+          onChange={e => setNotificationEmail(e.target.value)}
+          placeholder={t('schedulers.form.notificationEmailPlaceholder')}
+          className={`w-full ${inputCls}`}
+        />
+        <p className="text-xs text-gray-400 mt-1.5">{t('schedulers.form.notificationEmailHint')}</p>
       </div>
 
       {/* Buttons */}

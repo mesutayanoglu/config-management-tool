@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from github import Github, GithubException, InputGitTreeElement
@@ -7,6 +8,9 @@ from app.core.config import settings
 
 class GitHubService:
     def __init__(self):
+        self._client = None
+
+    def reset_client(self):
         self._client = None
 
     @property
@@ -97,6 +101,17 @@ class GitHubService:
         except GithubException:
             return []
 
+    def _decode_content(self, content) -> str:
+        """ContentFile'ı güvenli şekilde string'e çevirir.
+        1MB üzeri dosyalar için GitHub encoding=none döndürür;
+        bu durumda Git Blob API ile blob SHA üzerinden içerik alınır."""
+        if content.encoding != "none":
+            return content.decoded_content.decode("utf-8", errors="replace")
+        blob = self.repo.get_git_blob(content.sha)
+        if blob.encoding == "base64":
+            return base64.b64decode(blob.content).decode("utf-8", errors="replace")
+        return blob.content
+
     async def get_config(self, device_uid: str, sha: str | None = None) -> str | None:
         """Belirtilen commit'teki (ya da en güncel) running-config.txt içeriğini döndürür."""
         path = f"{device_uid}/running-config.txt"
@@ -105,6 +120,9 @@ class GitHubService:
                 content = self.repo.get_contents(path, ref=sha)
             else:
                 content = self.repo.get_contents(path)
-            return content.decoded_content.decode()
+            return self._decode_content(content)
         except GithubException:
             return None
+
+
+github_service = GitHubService()

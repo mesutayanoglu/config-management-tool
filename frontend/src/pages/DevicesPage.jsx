@@ -1,24 +1,51 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { devicesApi } from '../services/api'
 import { useLanguage } from '../i18n'
 import useAuthStore from '../store/authStore'
+import useCredentialProfiles from '../hooks/useCredentialProfiles'
 import DeviceList from '../components/Devices/DeviceList'
-import DeviceForm from '../components/Devices/DeviceForm'
+import DeviceFilterBar from '../components/Devices/DeviceFilterBar'
+import DeviceAddModal from '../components/Devices/DeviceAddModal'
 import DeviceEditModal from '../components/Devices/DeviceEditModal'
+import CredentialProfileModal from '../components/Devices/CredentialProfileModal'
 import Toast from '../components/Toast'
 import ConfirmModal from '../components/ConfirmModal'
 
 export default function DevicesPage() {
   const { t } = useLanguage()
   const { isReadOnly } = useAuthStore()
+  const { profiles, add: addProfile, update: updateProfile, remove: removeProfile } = useCredentialProfiles()
+
+  // ── Sunucu verisi ──────────────────────────────────────────────────────────
   const [devices, setDevices] = useState([])
-  const [showForm, setShowForm] = useState(false)
+
+  // ── UI durumu ─────────────────────────────────────────────────────────────
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showProfileManager, setShowProfileManager] = useState(false)
   const [toast, setToast] = useState(null)
-  const [collectingIds, setCollectingIds] = useState(new Set())
   const [confirm, setConfirm] = useState(null)
   const [editingDevice, setEditingDevice] = useState(null)
+  const [collectingIds, setCollectingIds] = useState(new Set())
+
+  // ── Filtre durumu ─────────────────────────────────────────────────────────
+  const [filters, setFilters] = useState({ search: '', vendors: [], statuses: [] })
 
   const devicesRef = useRef([])
+
+  // ── Türetilmiş: filtrelenmiş cihaz listesi ────────────────────────────────
+  const filteredDevices = useMemo(() => {
+    return devices.filter(d => {
+      if (filters.search) {
+        const q = filters.search.toLowerCase()
+        if (!d.hostname.toLowerCase().includes(q) && !d.ip_address.toLowerCase().includes(q)) return false
+      }
+      if (filters.vendors.length > 0 && !filters.vendors.includes(d.vendor)) return false
+      if (filters.statuses.length > 0 && !filters.statuses.includes(d.status)) return false
+      return true
+    })
+  }, [devices, filters])
+
+  // ── Veri yükleme ──────────────────────────────────────────────────────────
 
   const loadDevices = useCallback(async () => {
     const { data } = await devicesApi.list()
@@ -30,8 +57,8 @@ export default function DevicesPage() {
     for (const d of devicesRef.current) {
       try {
         const { data } = await devicesApi.ping(d.id)
-        setDevices((prev) =>
-          prev.map((dev) => dev.id === d.id ? { ...dev, status: data.status } : dev)
+        setDevices(prev =>
+          prev.map(dev => dev.id === d.id ? { ...dev, status: data.status } : dev)
         )
       } catch {}
     }
@@ -39,39 +66,43 @@ export default function DevicesPage() {
 
   useEffect(() => {
     loadDevices()
-    const loadInterval = setInterval(loadDevices, 30000)
-    return () => clearInterval(loadInterval)
+    const interval = setInterval(loadDevices, 30000)
+    return () => clearInterval(interval)
   }, [loadDevices])
 
   useEffect(() => {
-    const first = setTimeout(pingAll, 1500)
+    const first    = setTimeout(pingAll, 1500)
     const interval = setInterval(pingAll, 10000)
     return () => { clearTimeout(first); clearInterval(interval) }
   }, [pingAll])
+
+  // ── Yardımcı ──────────────────────────────────────────────────────────────
 
   function showToast(message, type = 'success') {
     setToast({ message, type })
   }
 
+  // ── CRUD işlemleri ────────────────────────────────────────────────────────
+
   async function handleCreate(form) {
     await devicesApi.create(form)
-    setShowForm(false)
+    setShowAddModal(false)
     loadDevices()
     showToast(t('devices.toast.created'))
   }
 
   async function handleCollect(id) {
     if (collectingIds.has(id)) return
-    setCollectingIds((prev) => new Set([...prev, id]))
+    setCollectingIds(prev => new Set([...prev, id]))
     try {
       await devicesApi.collect(id)
-      showToast(t('devices.toast.configOk'), 'success')
+      showToast(t('devices.toast.configOk'))
       loadDevices()
     } catch (err) {
       const detail = err?.response?.data?.detail
       showToast(detail || t('devices.toast.configFail'), 'error')
     } finally {
-      setCollectingIds((prev) => {
+      setCollectingIds(prev => {
         const next = new Set(prev)
         next.delete(id)
         return next
@@ -80,8 +111,7 @@ export default function DevicesPage() {
   }
 
   function handleDelete(id) {
-    const device = devices.find((d) => d.id === id)
-    const name = device?.hostname || '?'
+    const name = devices.find(d => d.id === id)?.hostname || '?'
     setConfirm({
       title: t('devices.confirm.deleteTitle'),
       message: `"${name}" ${t('devices.confirm.deleteMsg')}`,
@@ -110,30 +140,46 @@ export default function DevicesPage() {
     showToast(t('devices.toast.updated'))
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div>
+
+      {/* Sayfa başlığı + aksiyonlar */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">{t('devices.title')}</h1>
         {!isReadOnly() && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
-          >
-            {t('devices.addButton')}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowProfileManager(true)}
+              className="border border-gray-300 text-gray-600 px-3 py-2 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              {t('credProfiles.manageBtn')}
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+            >
+              {t('devices.addButton')}
+            </button>
+          </div>
         )}
       </div>
 
-      {showForm && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6 max-w-lg">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">{t('devices.newDevice')}</h2>
-          <DeviceForm onSubmit={handleCreate} onCancel={() => setShowForm(false)} />
-        </div>
-      )}
-
+      {/* Ana kart: filtre çubuğu + tablo */}
       <div className="bg-white border border-gray-200 rounded-lg">
+        <DeviceFilterBar
+          totalCount={devices.length}
+          filteredCount={filteredDevices.length}
+          filters={filters}
+          onChange={setFilters}
+        />
         <DeviceList
-          devices={devices}
+          devices={filteredDevices}
+          allCount={devices.length}
           onCollect={handleCollect}
           onDelete={handleDelete}
           onEdit={setEditingDevice}
@@ -142,8 +188,33 @@ export default function DevicesPage() {
         />
       </div>
 
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {/* Cihaz ekleme modalı */}
+      {showAddModal && (
+        <DeviceAddModal
+          onSubmit={handleCreate}
+          onClose={() => setShowAddModal(false)}
+          profiles={profiles}
+          onOpenProfileManager={() => setShowProfileManager(true)}
+        />
+      )}
 
+      {/* Credential Profile yönetim modalı */}
+      {showProfileManager && (
+        <CredentialProfileModal
+          profiles={profiles}
+          onAdd={addProfile}
+          onUpdate={updateProfile}
+          onDelete={removeProfile}
+          onClose={() => setShowProfileManager(false)}
+        />
+      )}
+
+      {/* Toast bildirimi */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+
+      {/* Silme onay modalı */}
       {confirm && (
         <ConfirmModal
           title={confirm.title}
@@ -155,13 +226,17 @@ export default function DevicesPage() {
         />
       )}
 
+      {/* Cihaz düzenleme modalı */}
       {editingDevice && (
         <DeviceEditModal
           device={editingDevice}
           onSave={handleEditSave}
           onClose={() => setEditingDevice(null)}
+          profiles={profiles}
+          onOpenProfileManager={() => { setEditingDevice(null); setShowProfileManager(true) }}
         />
       )}
+
     </div>
   )
 }

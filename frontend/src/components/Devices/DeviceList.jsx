@@ -1,41 +1,69 @@
+/**
+ * DeviceList
+ *
+ * Cihaz verilerini tablo formatında gösteren bileşen.
+ * Filtreleme DevicesPage seviyesinde yapılır; bu bileşen
+ * sadece kendisine gelen `devices` dizisini render eder.
+ *
+ * Sütunlar: HOSTNAME | IP | MARKA | SON CONFIG | DURUM | İŞLEMLER
+ */
 import { useLanguage } from '../../i18n'
 
-export default function DeviceList({ devices, onCollect, onDelete, onEdit, collectingIds, readOnly = false }) {
+export default function DeviceList({
+  devices,       // Filtrelenmiş cihaz listesi (DevicesPage'den türetilir)
+  allCount,      // Toplam cihaz sayısı — boş durum mesajı için
+  onCollect,     // Config alma işlemi callback'i
+  onDelete,      // Silme callback'i
+  onEdit,        // Düzenleme callback'i
+  collectingIds, // Şu an config alınan cihaz ID'leri (Set)
+  readOnly,      // true ise aksiyon butonları gizlenir
+}) {
   const { t } = useLanguage()
 
+  // ── Durum badge stilleri ──────────────────────────────────────────────────
   const statusConfig = {
     online:  { bg: 'bg-green-100 text-green-700', dot: 'bg-green-500', label: t('deviceList.status.online') },
     offline: { bg: 'bg-red-100 text-red-700',     dot: 'bg-red-500',   label: t('deviceList.status.offline') },
     unknown: { bg: 'bg-gray-100 text-gray-500',   dot: 'bg-gray-400',  label: t('deviceList.status.unknown') },
   }
 
-  const headers = [
-    t('deviceList.col.hostname'),
-    t('deviceList.col.ip'),
-    t('deviceList.col.brand'),
-    t('deviceList.col.lastConfig'),
-    t('deviceList.col.status'),
-    t('deviceList.col.actions'),
-  ]
-
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 text-sm">
+
+        {/* ── Tablo başlıkları ── */}
         <thead className="bg-gray-50">
           <tr>
-            {headers.map((h) => (
-              <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 tracking-wider">
-                {h}
+            {[
+              t('deviceList.col.hostname'),
+              t('deviceList.col.ip'),
+              t('deviceList.col.brand'),
+              t('deviceList.col.lastConfig'),
+              t('deviceList.col.status'),
+              t('deviceList.col.actions'),
+            ].map(header => (
+              <th
+                key={header}
+                className="px-4 py-3 text-left text-xs font-semibold text-gray-500 tracking-wider"
+              >
+                {header}
               </th>
             ))}
           </tr>
         </thead>
+
+        {/* ── Tablo gövdesi ── */}
         <tbody className="bg-white divide-y divide-gray-200">
-          {devices.map((d) => {
+
+          {/* Cihaz satırları */}
+          {devices.map(d => {
             const st = statusConfig[d.status] || statusConfig.unknown
             const isCollecting = collectingIds?.has(d.id)
+
             return (
-              <tr key={d.id} className="hover:bg-gray-50">
+              <tr key={d.id} className="hover:bg-gray-50 transition-colors">
+
+                {/* Hostname + org/site hiyerarşisi */}
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-900">{d.hostname}</div>
                   {(d.org_name || d.site_name) && (
@@ -44,27 +72,43 @@ export default function DeviceList({ devices, onCollect, onDelete, onEdit, colle
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 text-gray-600 font-mono text-xs">{d.ip_address}</td>
+
+                {/* IP adresi — monospace font */}
+                <td className="px-4 py-3 font-mono text-xs text-gray-600">
+                  {d.ip_address}
+                </td>
+
+                {/* Marka + model/versiyon (config çekildikten sonra dolar) */}
                 <td className="px-4 py-3">
                   <span className="capitalize text-gray-700">{d.vendor}</span>
                   {(d.model || d.version) && (
-                    <div className="text-xs text-gray-400">{[d.model, d.version].filter(Boolean).join(' • ')}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {[d.model, d.version].filter(Boolean).join(' • ')}
+                    </div>
                   )}
                 </td>
+
+                {/* Son config tarihi — yoksa uzun çizgi */}
                 <td className="px-4 py-3 text-xs text-gray-500">
                   {d.last_collected_at
                     ? new Date(d.last_collected_at).toLocaleString('tr-TR')
                     : <span className="text-gray-300">—</span>}
                 </td>
+
+                {/* Durum badge'i — renkli nokta + etiket */}
                 <td className="px-4 py-3">
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${st.bg}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}></span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                     {st.label}
                   </span>
                 </td>
+
+                {/* Aksiyon butonları — read-only kullanıcılarda gizlenir */}
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {!readOnly && (
+                  {!readOnly && (
+                    <div className="flex items-center gap-2">
+
+                      {/* Config Al */}
                       <button
                         onClick={() => onCollect(d.id)}
                         disabled={isCollecting}
@@ -90,9 +134,8 @@ export default function DeviceList({ devices, onCollect, onDelete, onEdit, colle
                           </>
                         )}
                       </button>
-                    )}
 
-                    {!readOnly && (
+                      {/* Düzenle */}
                       <button
                         onClick={() => onEdit(d)}
                         disabled={isCollecting}
@@ -103,9 +146,8 @@ export default function DeviceList({ devices, onCollect, onDelete, onEdit, colle
                         </svg>
                         {t('common.edit')}
                       </button>
-                    )}
 
-                    {!readOnly && (
+                      {/* Sil */}
                       <button
                         onClick={() => onDelete(d.id)}
                         disabled={isCollecting}
@@ -116,19 +158,27 @@ export default function DeviceList({ devices, onCollect, onDelete, onEdit, colle
                         </svg>
                         {t('common.delete')}
                       </button>
-                    )}
-                  </div>
+
+                    </div>
+                  )}
                 </td>
+
               </tr>
             )
           })}
+
+          {/* ── Boş durum mesajı ── */}
           {devices.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-10 text-center text-gray-400">
-                {t('devices.empty')}
+              <td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">
+                {/* Filtre aktifken "eşleşme yok", aksi halde "henüz cihaz yok" */}
+                {allCount > 0
+                  ? t('deviceFilter.noResults')
+                  : t('devices.empty')}
               </td>
             </tr>
           )}
+
         </tbody>
       </table>
     </div>

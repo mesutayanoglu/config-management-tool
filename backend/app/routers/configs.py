@@ -2,10 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.security import get_current_user
 from app.models.user import User
-from app.services.github_service import GitHubService
+from app.services.github_service import github_service as github
 
 router = APIRouter()
-github = GitHubService()
 
 
 @router.get("/")

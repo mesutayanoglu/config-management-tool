@@ -75,6 +75,20 @@ export default function SchedulersPage() {
     setToast({ message: t('schedulers.toast.updated'), type: 'success' })
   }
 
+  async function handleToggle(s) {
+    const newActive = !s.is_active
+    setSchedulers((prev) => prev.map((x) => x.id === s.id ? { ...x, is_active: newActive } : x))
+    try {
+      await schedulersApi.update(s.id, { is_active: newActive })
+      setToast({
+        message: newActive ? t('schedulers.toast.activated') : t('schedulers.toast.deactivated'),
+        type: newActive ? 'success' : 'info',
+      })
+    } catch {
+      setSchedulers((prev) => prev.map((x) => x.id === s.id ? { ...x, is_active: s.is_active } : x))
+    }
+  }
+
   function handleDelete(s) {
     setConfirm({
       title: t('schedulers.confirm.deleteTitle'),
@@ -161,12 +175,24 @@ export default function SchedulersPage() {
                       : <span className="text-gray-400 text-xs">{t('schedulers.neverRun')}</span>}
                   </td>
                   <td className={tdCls}>
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
-                      s.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${s.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
-                      {s.is_active ? t('schedulers.active') : t('schedulers.passive')}
-                    </span>
+                    <div className="flex items-center gap-2.5">
+                      {!isReadOnly() ? (
+                        <button
+                          onClick={() => handleToggle(s)}
+                          title={s.is_active ? t('schedulers.passive') : t('schedulers.active')}
+                          className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                            s.is_active ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                            s.is_active ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      ) : null}
+                      <span className={`text-xs font-medium ${s.is_active ? 'text-slate-700' : 'text-slate-400'}`}>
+                        {s.is_active ? t('schedulers.active') : t('schedulers.passive')}
+                      </span>
+                    </div>
                   </td>
                   <td className={`${tdCls} text-right`}>
                     {!isReadOnly() && (

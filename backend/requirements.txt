@@ -14,18 +14,9 @@ bcrypt==4.2.0
 
 # SSH
 netmiko==4.4.0
-paramiko==3.5.0
 
 # GitHub
 PyGithub==2.4.0
 
-# Celery / Redis
-celery==5.4.0
-redis==5.1.1
-
 # Scheduler
 apscheduler==3.10.4
-
-# Utils
-python-multipart==0.0.12
-httpx==0.27.2

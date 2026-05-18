@@ -6,8 +6,9 @@ from github import Github, GithubException
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_current_user, get_super_admin_user
+from app.core.security import get_admin_user, get_current_user
 from app.models.user import User
+from app.services.github_service import github_service
 
 router = APIRouter()
 
@@ -56,7 +57,7 @@ async def get_settings(_: User = Depends(get_current_user)):
 async def save_settings(
     body: GithubSettings,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_super_admin_user),
+    _: User = Depends(get_admin_user),
 ):
     token = body.github_token.strip()
     repo = normalize_repo(body.github_repo)
@@ -64,6 +65,7 @@ async def save_settings(
     if token and token != "***":
         settings.GITHUB_TOKEN = token
         await _upsert(db, "GITHUB_TOKEN", token)
+        github_service.reset_client()
 
     if repo:
         settings.GITHUB_REPO = repo
@@ -74,7 +76,7 @@ async def save_settings(
 
 
 @router.get("/test-github")
-async def test_github(_: User = Depends(get_super_admin_user)):
+async def test_github(_: User = Depends(get_admin_user)):
     token = settings.GITHUB_TOKEN
     repo = normalize_repo(settings.GITHUB_REPO)
     if not token or not repo:
@@ -102,7 +104,7 @@ async def get_smtp_settings(_: User = Depends(get_current_user)):
 async def save_smtp_settings(
     body: SmtpSettings,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_super_admin_user),
+    _: User = Depends(get_admin_user),
 ):
     await _upsert(db, "SMTP_HOST", body.smtp_host.strip())
     await _upsert(db, "SMTP_PORT", str(body.smtp_port))
@@ -124,7 +126,7 @@ async def save_smtp_settings(
 
 
 @router.post("/test-smtp")
-async def test_smtp(current_user: User = Depends(get_super_admin_user)):
+async def test_smtp(current_user: User = Depends(get_admin_user)):
     from app.services.email_service import send_test_email
 
     if not current_user.email:

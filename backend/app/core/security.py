@@ -72,6 +72,15 @@ async def get_super_admin_user(current_user=Depends(get_current_user)):
     return current_user
 
 
+async def get_admin_user(current_user=Depends(get_current_user)):
+    if current_user.role == 'read_only':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu işlem için en az admin yetkisi gereklidir",
+        )
+    return current_user
+
+
 async def get_write_user(current_user=Depends(get_current_user)):
     if current_user.role == 'read_only':
         raise HTTPException(

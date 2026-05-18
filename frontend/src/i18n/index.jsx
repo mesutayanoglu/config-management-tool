@@ -2,7 +2,7 @@ import { createContext, useContext, useState } from 'react'
 
 const tr = {
   // Nav
-  'nav.dashboard': 'Dashboard',
+  'nav.dashboard': 'Anasayfa',
   'nav.devices': 'Cihazlar',
   'nav.configs': 'Konfigürasyonlar',
   'nav.schedulers': 'Zamanlayıcı',
@@ -22,10 +22,25 @@ const tr = {
   'common.logout': 'Çıkış',
 
   // Dashboard
-  'dashboard.title': 'Dashboard',
+  'dashboard.title': 'Anasayfa',
   'dashboard.totalDevices': 'Toplam Cihaz',
-  'dashboard.onlineDevices': 'Online Cihaz',
+  'dashboard.onlineDevices': 'Çevrimiçi Cihaz',
   'dashboard.activeSchedulers': 'Aktif Zamanlayıcı',
+  'dashboard.lastBackup': 'Son Yedekleme',
+  'dashboard.offlineDevices2': 'Çevrimdışı Cihaz',
+  'dashboard.recentRuns': 'Son Zamanlayıcı Çalışması',
+  'dashboard.systemStatus': 'Çevrimdışı Cihazlar',
+  'dashboard.offlineAlert': 'cihaz çevrimdışı',
+  'dashboard.schedulerName': 'Zamanlayıcı',
+  'dashboard.lastRunAt': 'Son Çalışma',
+  'dashboard.statusCol': 'Durum',
+  'dashboard.active': 'Aktif',
+  'dashboard.inactive': 'Pasif',
+  'dashboard.neverRun': 'Henüz çalışmadı',
+  'dashboard.noSchedulers': 'Henüz zamanlayıcı eklenmedi.',
+  'dashboard.noDevices': 'Henüz cihaz eklenmedi.',
+  'dashboard.offlineDevices': 'Çevrimdışı Cihazlar',
+  'dashboard.noOffline': 'Tüm cihazlar erişilebilir durumda.',
 
   // Devices Page
   'devices.title': 'Cihazlar',
@@ -40,6 +55,14 @@ const tr = {
   'devices.confirm.deleteTitle': 'Cihazı Sil',
   'devices.confirm.deleteMsg': 'silinecek. Bu işlem geri alınamaz.',
   'devices.toast.deleteSchedulerError': 'Bu cihaz bir zamanlayıcıya bağlı olduğu için silinemez. Önce zamanlayıcıdan çıkarın.',
+
+  // Device Filter Bar
+  'deviceFilter.searchPlaceholder': 'Hostname veya IP ara...',
+  'deviceFilter.brand': 'Marka',
+  'deviceFilter.status': 'Durum',
+  'deviceFilter.clearAll': 'Temizle',
+  'deviceFilter.results': 'cihaz',
+  'deviceFilter.noResults': 'Filtreyle eşleşen cihaz bulunamadı.',
 
   // Device List
   'deviceList.col.hostname': 'HOSTNAME',
@@ -72,6 +95,22 @@ const tr = {
   'editModal.title': 'Cihazı Düzenle',
   'editModal.passwordPlaceholder': 'Değiştirmek için girin',
   'editModal.saveFailed': 'Kayıt başarısız.',
+
+  // Credential Profiles
+  'credProfiles.title': 'Kimlik Profilleri',
+  'credProfiles.subtitle': 'SSH kimlik bilgilerini profil olarak tanımlayın',
+  'credProfiles.manageBtn': 'Kimlik Profilleri',
+  'credProfiles.manage': 'Kimlik Profili Yönet',
+  'credProfiles.selectLabel': 'Kimlik Profili',
+  'credProfiles.selectPlaceholder': 'Manuel giriş veya profil seçin',
+  'credProfiles.empty': 'Henüz profil tanımlanmamış.',
+  'credProfiles.addNew': 'Yeni Profil',
+  'credProfiles.profileName': 'Profil Adı',
+  'credProfiles.namePlaceholder': 'örn: Switch Profili, Firewall Profili',
+  'credProfiles.addBtn': 'Profil Oluştur',
+  'credProfiles.updateBtn': 'Güncelle',
+  'credProfiles.editHint': 'Bilgileri düzenleyip kaydedin',
+  'credProfiles.newHint': 'Yeni kimlik profili oluşturun',
 
   // Configs Page
   'configs.filter': 'Filtrele',
@@ -250,6 +289,8 @@ const tr = {
   'schedulers.toast.created': 'Zamanlayıcı oluşturuldu.',
   'schedulers.toast.updated': 'Zamanlayıcı güncellendi.',
   'schedulers.toast.deleted': 'Zamanlayıcı silindi.',
+  'schedulers.toast.activated': 'Zamanlayıcı aktif edildi.',
+  'schedulers.toast.deactivated': 'Zamanlayıcı pasif edildi.',
 
   // Scheduler table headers
   'schedulers.col.name': 'AD',
@@ -293,6 +334,9 @@ const tr = {
   'schedulers.form.noDevicesInOrg': 'Bu organizasyonda kayıtlı cihaz bulunamadı.',
   'schedulers.form.noDevicesInSite': 'Bu şubede kayıtlı cihaz bulunamadı.',
   'schedulers.form.ungrouped': 'Gruplandırılmamış',
+  'schedulers.form.notificationEmail': 'Bildirim E-posta',
+  'schedulers.form.notificationEmailPlaceholder': 'ornek@sirket.com',
+  'schedulers.form.notificationEmailHint': 'Zamanlayıcı çalıştığında cihaz raporu bu adrese gönderilir.',
 
   // Day names
   'day.0': 'Pzt',
@@ -330,6 +374,21 @@ const en = {
   'dashboard.totalDevices': 'Total Devices',
   'dashboard.onlineDevices': 'Online Devices',
   'dashboard.activeSchedulers': 'Active Schedulers',
+  'dashboard.lastBackup': 'Last Backup',
+  'dashboard.offlineDevices2': 'Offline Devices',
+  'dashboard.recentRuns': 'Last Scheduler Run',
+  'dashboard.systemStatus': 'Offline Devices',
+  'dashboard.offlineAlert': 'devices offline',
+  'dashboard.schedulerName': 'Scheduler',
+  'dashboard.lastRunAt': 'Last Run',
+  'dashboard.statusCol': 'Status',
+  'dashboard.active': 'Active',
+  'dashboard.inactive': 'Inactive',
+  'dashboard.neverRun': 'Never run',
+  'dashboard.noSchedulers': 'No schedulers added yet.',
+  'dashboard.noDevices': 'No devices added yet.',
+  'dashboard.offlineDevices': 'Offline Devices',
+  'dashboard.noOffline': 'All devices are reachable.',
 
   // Devices Page
   'devices.title': 'Devices',
@@ -344,6 +403,14 @@ const en = {
   'devices.confirm.deleteTitle': 'Delete Device',
   'devices.confirm.deleteMsg': 'will be deleted. This action cannot be undone.',
   'devices.toast.deleteSchedulerError': 'This device is linked to a scheduler and cannot be deleted. Remove it from the scheduler first.',
+
+  // Device Filter Bar
+  'deviceFilter.searchPlaceholder': 'Search hostname or IP...',
+  'deviceFilter.brand': 'Brand',
+  'deviceFilter.status': 'Status',
+  'deviceFilter.clearAll': 'Clear',
+  'deviceFilter.results': 'devices',
+  'deviceFilter.noResults': 'No devices match the current filters.',
 
   // Device List
   'deviceList.col.hostname': 'HOSTNAME',
@@ -376,6 +443,22 @@ const en = {
   'editModal.title': 'Edit Device',
   'editModal.passwordPlaceholder': 'Enter to change',
   'editModal.saveFailed': 'Save failed.',
+
+  // Credential Profiles
+  'credProfiles.title': 'Credential Profiles',
+  'credProfiles.subtitle': 'Define SSH credentials as reusable profiles',
+  'credProfiles.manageBtn': 'Profiles',
+  'credProfiles.manage': 'Manage Profiles',
+  'credProfiles.selectLabel': 'Credential Profile',
+  'credProfiles.selectPlaceholder': 'Enter manually or select a profile',
+  'credProfiles.empty': 'No profiles defined yet.',
+  'credProfiles.addNew': 'New Profile',
+  'credProfiles.profileName': 'Profile Name',
+  'credProfiles.namePlaceholder': 'e.g. Switch Profile, Firewall Profile',
+  'credProfiles.addBtn': 'Create Profile',
+  'credProfiles.updateBtn': 'Update',
+  'credProfiles.editHint': 'Edit the details and save',
+  'credProfiles.newHint': 'Create a new credential profile',
 
   // Configs Page
   'configs.filter': 'Filter',
@@ -554,6 +637,8 @@ const en = {
   'schedulers.toast.created': 'Scheduler created.',
   'schedulers.toast.updated': 'Scheduler updated.',
   'schedulers.toast.deleted': 'Scheduler deleted.',
+  'schedulers.toast.activated': 'Scheduler activated.',
+  'schedulers.toast.deactivated': 'Scheduler deactivated.',
 
   // Scheduler table headers
   'schedulers.col.name': 'NAME',
@@ -597,6 +682,9 @@ const en = {
   'schedulers.form.noDevicesInOrg': 'No devices found in this organization.',
   'schedulers.form.noDevicesInSite': 'No devices found in this branch.',
   'schedulers.form.ungrouped': 'Ungrouped',
+  'schedulers.form.notificationEmail': 'Notification Email',
+  'schedulers.form.notificationEmailPlaceholder': 'example@company.com',
+  'schedulers.form.notificationEmailHint': 'A device report will be sent to this address when the scheduler runs.',
 
   // Day names
   'day.0': 'Mon',

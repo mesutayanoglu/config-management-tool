@@ -2,10 +2,8 @@ import asyncio
 from functools import partial
 
 from netmiko import ConnectHandler
-from app.services.github_service import GitHubService
+from app.services.github_service import github_service as github
 from app.services.config_parser import parse_model_version
-
-github = GitHubService()
 
 # Aruba: aruba_osswitch = fiziksel Aruba/HPE switch'ler
 #        aruba_os       = ArubaOS wireless controller

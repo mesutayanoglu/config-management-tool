@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
 import { useLanguage } from '../../i18n'
 import { authApi } from '../../services/api'
@@ -7,12 +7,22 @@ import { authApi } from '../../services/api'
 const ROLE_BADGE = {
   super_administrator: { label: 'super admin', cls: 'bg-red-100 text-red-700' },
   admin: { label: 'admin', cls: 'bg-blue-100 text-blue-700' },
-  read_only: { label: 'read only', cls: 'bg-gray-100 text-gray-600' },
+  read_only: { label: 'read only', cls: 'bg-slate-100 text-slate-600' },
+}
+
+const PAGE_TITLE_KEY = {
+  '/': 'nav.dashboard',
+  '/devices': 'nav.devices',
+  '/configs': 'nav.configs',
+  '/schedulers': 'nav.schedulers',
+  '/organizations': 'nav.locations',
+  '/settings': 'nav.settings',
 }
 
 export default function Navbar() {
   const { user, logout, setUser } = useAuthStore()
   const navigate = useNavigate()
+  const location = useLocation()
   const { lang, toggle, t } = useLanguage()
   const [showProfile, setShowProfile] = useState(false)
 
@@ -22,49 +32,65 @@ export default function Navbar() {
   }
 
   const badge = user?.role ? ROLE_BADGE[user.role] : null
+  const pageTitle = t(PAGE_TITLE_KEY[location.pathname] || 'nav.dashboard')
+  const userInitial = user?.username?.charAt(0).toUpperCase() || '?'
 
   return (
-    <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-end px-6 gap-4">
-      {/* Dil Değiştirici */}
-      <div
-        onClick={toggle}
-        title={lang === 'tr' ? 'Switch to English' : 'Türkçeye geç'}
-        className="flex items-center bg-gray-100 rounded-full p-0.5 cursor-pointer select-none"
-      >
-        <span className={`px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${lang === 'tr' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>
-          TR
-        </span>
-        <span className={`px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${lang === 'en' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>
-          EN
-        </span>
+    <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6">
+      {/* Page title */}
+      <h2 className="text-sm font-semibold text-slate-800">{pageTitle}</h2>
+
+      {/* Right controls */}
+      <div className="flex items-center gap-3">
+        {/* Language toggle */}
+        <div
+          onClick={toggle}
+          title={lang === 'tr' ? 'Switch to English' : 'Türkçeye geç'}
+          className="flex items-center bg-slate-100 rounded-full p-0.5 cursor-pointer select-none"
+        >
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${lang === 'tr' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
+            TR
+          </span>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${lang === 'en' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
+            EN
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-5 bg-slate-200" />
+
+        {/* User info + avatar */}
+        {user && (
+          <div className="flex items-center gap-2.5">
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-medium text-slate-800 leading-none">{user.username}</p>
+              {badge && (
+                <span className={`text-xs px-1.5 py-0.5 rounded font-medium mt-0.5 inline-block ${badge.cls}`}>
+                  {badge.label}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setShowProfile(true)}
+              title={t('navbar.editProfile')}
+              className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold hover:bg-blue-700 transition-colors flex-shrink-0"
+            >
+              {userInitial}
+            </button>
+          </div>
+        )}
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          title={t('common.logout')}
+          className="text-slate-400 hover:text-red-500 transition-colors"
+        >
+          <svg className="w-4.5 h-4.5 w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
       </div>
-
-      {user && (
-        <span className="text-sm text-gray-600 flex items-center gap-1.5">
-          {user.username}
-          {badge && (
-            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${badge.cls}`}>
-              {badge.label}
-            </span>
-          )}
-          <button
-            onClick={() => setShowProfile(true)}
-            title={t('navbar.editProfile')}
-            className="ml-0.5 text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
-            </svg>
-          </button>
-        </span>
-      )}
-
-      <button
-        onClick={handleLogout}
-        className="text-sm text-gray-500 hover:text-red-600 transition-colors"
-      >
-        {t('common.logout')}
-      </button>
 
       {showProfile && (
         <ProfileModal

@@ -14,9 +14,6 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str = ""
     GITHUB_REPO: str = ""  # örn: "kullaniciadi/config-backups"
 
-    # Redis / Celery
-    REDIS_URL: str = "redis://localhost:6379/0"
-
     # SSH defaults
     SSH_TIMEOUT: int = 30
 

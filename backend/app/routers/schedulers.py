@@ -38,6 +38,7 @@ def _to_out(s: Scheduler) -> SchedulerOut:
         target_site_id=s.target_site_id,
         target_org_name=s.target_org.name if s.target_org else None,
         target_site_name=s.target_site.name if s.target_site else None,
+        notification_email=s.notification_email,
         is_active=s.is_active,
         last_run_at=s.last_run_at,
         devices=devices,
@@ -92,6 +93,7 @@ async def create_scheduler(
         target_type=body.target_type,
         target_org_id=body.target_org_id,
         target_site_id=body.target_site_id,
+        notification_email=body.notification_email,
     )
     db.add(scheduler)
     await db.flush()

@@ -16,7 +16,7 @@ config-management-tool/
 │   │   ├── schemas/          # Pydantic request/response şemaları
 │   │   ├── routers/          # FastAPI router'ları (HTTP endpoint'ler)
 │   │   ├── services/         # İş mantığı servisleri
-│   │   ├── tasks/            # (Artık kullanılmıyor — Celery kalıntısı)
+│   │   ├── tasks/            # Sadece __init__.py (Celery kalıntıları temizlendi)
 │   │   └── main.py           # FastAPI app, lifespan, CORS
 │   ├── alembic/              # DB migration'ları
 │   └── requirements.txt
@@ -63,7 +63,7 @@ config-management-tool/
 
 ### Altyapı
 - **PostgreSQL 16** — Ana veritabanı
-- **Redis 7** — Kurulu ama aktif kullanılmıyor (Celery kaldırıldı)
+- **Redis 7** — Kaldırıldı (Celery ile birlikte docker-compose'dan çıkarıldı)
 - **Docker Compose** — Tüm servisler container'da çalışır
 - **Nginx** — Frontend static dosyaları serve eder + `/api/` → backend proxy
 
@@ -75,10 +75,9 @@ config-management-tool/
 backend   → localhost:8000  (FastAPI + Uvicorn --reload)
 frontend  → localhost:80    (Nginx, production build)
 postgres  → localhost:5432
-redis     → localhost:6379  (kullanılmıyor)
 ```
 
-> **Not:** `celery_worker` ve `celery_beat` servisleri kaldırıldı.
+> **Not:** `celery_worker`, `celery_beat` ve `redis` servisleri kaldırıldı.
 > APScheduler backend process içinde çalışıyor, ayrı worker gerekmez.
 
 ### Projeyi başlatmak
@@ -462,8 +461,8 @@ Migration çalıştırmak: `alembic upgrade head` (backend container içinde)
 
 ### Celery → APScheduler Geçişi
 Celery kaldırıldı, APScheduler backend process içinde `AsyncIOScheduler` olarak çalışıyor.
-Ayrı worker container gerektirmiyor. Redis hâlâ compose'da mevcut ama kullanılmıyor.
-`requirements.txt`'te `celery` ve `redis` paketleri kalıntı olarak duruyor — gerekirse temizlenebilir.
+Ayrı worker container gerektirmiyor. Redis ve Celery docker-compose ve requirements.txt'ten tamamen kaldırıldı.
+`github_service.py` singleton pattern kullanıyor — token güncellenince `reset_client()` çağırılır.
 
 ### GitHub Config Depolama Stratejisi
 Config değişmese bile her backup ayrı commit oluşturur.

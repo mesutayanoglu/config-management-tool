@@ -14,6 +14,7 @@ class SchedulerCreate(BaseModel):
     target_org_id: int | None = None
     target_site_id: int | None = None
     device_ids: list[int] = []
+    notification_email: str | None = None
 
 
 class SchedulerUpdate(BaseModel):
@@ -28,6 +29,8 @@ class SchedulerUpdate(BaseModel):
     target_org_id: int | None = None
     target_site_id: int | None = None
     device_ids: list[int] | None = None
+    notification_email: str | None = None
+    is_active: bool | None = None
 
 
 class DeviceBrief(BaseModel):
@@ -50,6 +53,7 @@ class SchedulerOut(BaseModel):
     target_site_id: int | None
     target_org_name: str | None
     target_site_name: str | None
+    notification_email: str | None
     is_active: int
     last_run_at: datetime | None
     devices: list[DeviceBrief]

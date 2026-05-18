@@ -22,6 +22,7 @@ class Scheduler(Base):
     target_org_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
     target_site_id = Column(Integer, ForeignKey('sites.id'), nullable=True)
 
+    notification_email = Column(String, nullable=True)
     is_active = Column(Integer, default=1)
     last_run_at = Column(DateTime, nullable=True)
 
