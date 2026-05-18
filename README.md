@@ -13,7 +13,7 @@ Ağ cihazlarının (FortiGate, Aruba CX, Huawei, Cisco) konfigürasyonlarını S
 
 ## Kurulum
 
-### 1. Depoyu klonla
+### 1. Repoyu klonla
 
 ```bash
 git clone <repo-url>
