@@ -7,7 +7,7 @@ import DeviceList from '../components/Devices/DeviceList'
 import DeviceFilterBar from '../components/Devices/DeviceFilterBar'
 import DeviceAddModal from '../components/Devices/DeviceAddModal'
 import DeviceEditModal from '../components/Devices/DeviceEditModal'
-import CredentialProfileModal from '../components/Devices/CredentialProfileModal'
+import DeviceImportModal from '../components/Devices/DeviceImportModal'
 import Toast from '../components/Toast'
 import ConfirmModal from '../components/ConfirmModal'
 
@@ -21,7 +21,7 @@ export default function DevicesPage() {
 
   // ── UI durumu ─────────────────────────────────────────────────────────────
   const [showAddModal, setShowAddModal] = useState(false)
-  const [showProfileManager, setShowProfileManager] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(null)
   const [editingDevice, setEditingDevice] = useState(null)
@@ -83,6 +83,28 @@ export default function DevicesPage() {
   }
 
   // ── CRUD işlemleri ────────────────────────────────────────────────────────
+
+  function handleExport() {
+    const headers = ['location', 'site', 'hostname', 'ip_address', 'vendor', 'credential_profile', 'ssh_username']
+    const rows = devices.map(d => [
+      d.org_name || '',
+      d.site_name || '',
+      d.hostname,
+      d.ip_address,
+      d.vendor,
+      d.credential_profile_name || '',
+      d.ssh_username || '',
+    ])
+    const csv = [headers, ...rows].map(r => r.map(f => `"${String(f).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'cihazlar.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+    showToast(t('devices.export.toast'))
+  }
 
   async function handleCreate(form) {
     await devicesApi.create(form)
@@ -148,25 +170,40 @@ export default function DevicesPage() {
       {/* Sayfa başlığı + aksiyonlar */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">{t('devices.title')}</h1>
-        {!isReadOnly() && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowProfileManager(true)}
-              className="border border-gray-300 text-gray-600 px-3 py-2 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1.5"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-              </svg>
-              {t('credProfiles.manageBtn')}
-            </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
-            >
-              {t('devices.addButton')}
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            disabled={devices.length === 0}
+            className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            {t('devices.exportButton')}
+          </button>
+          {!isReadOnly() && (
+            <>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {t('devices.importButton')}
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                {t('devices.addButton')}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Ana kart: filtre çubuğu + tablo */}
@@ -188,24 +225,22 @@ export default function DevicesPage() {
         />
       </div>
 
+      {/* Toplu içe aktarma modalı */}
+      {showImportModal && (
+        <DeviceImportModal
+          onClose={() => setShowImportModal(false)}
+          onImportComplete={() => { setShowImportModal(false); loadDevices(); showToast(t('devices.toast.created')) }}
+          profiles={profiles}
+          existingIps={devices.map(d => d.ip_address)}
+        />
+      )}
+
       {/* Cihaz ekleme modalı */}
       {showAddModal && (
         <DeviceAddModal
           onSubmit={handleCreate}
           onClose={() => setShowAddModal(false)}
           profiles={profiles}
-          onOpenProfileManager={() => setShowProfileManager(true)}
-        />
-      )}
-
-      {/* Credential Profile yönetim modalı */}
-      {showProfileManager && (
-        <CredentialProfileModal
-          profiles={profiles}
-          onAdd={addProfile}
-          onUpdate={updateProfile}
-          onDelete={removeProfile}
-          onClose={() => setShowProfileManager(false)}
         />
       )}
 
@@ -233,7 +268,6 @@ export default function DevicesPage() {
           onSave={handleEditSave}
           onClose={() => setEditingDevice(null)}
           profiles={profiles}
-          onOpenProfileManager={() => { setEditingDevice(null); setShowProfileManager(true) }}
         />
       )}
 

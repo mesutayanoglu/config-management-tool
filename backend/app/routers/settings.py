@@ -45,6 +45,11 @@ class SmtpSettings(BaseModel):
     smtp_from: str = ""
 
 
+class NotificationSettings(BaseModel):
+    enabled: bool = False
+    emails: str = ""
+
+
 @router.get("/")
 async def get_settings(_: User = Depends(get_current_user)):
     return {
@@ -122,6 +127,28 @@ async def save_smtp_settings(
     settings.SMTP_USER = body.smtp_user.strip()
     settings.SMTP_FROM = body.smtp_from.strip()
 
+    return {"status": "ok"}
+
+
+@router.get("/notifications")
+async def get_notification_settings(_: User = Depends(get_current_user)):
+    return {
+        "enabled": settings.CHANGE_NOTIFY_ENABLED,
+        "emails": settings.CHANGE_NOTIFY_EMAILS,
+    }
+
+
+@router.post("/notifications")
+async def save_notification_settings(
+    body: NotificationSettings,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    settings.CHANGE_NOTIFY_ENABLED = body.enabled
+    settings.CHANGE_NOTIFY_EMAILS = body.emails.strip()
+    await _upsert(db, "CHANGE_NOTIFY_ENABLED", str(body.enabled).lower())
+    await _upsert(db, "CHANGE_NOTIFY_EMAILS", body.emails.strip())
+    await db.commit()
     return {"status": "ok"}
 
 

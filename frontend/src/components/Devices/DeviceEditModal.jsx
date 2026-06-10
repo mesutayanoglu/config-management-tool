@@ -4,7 +4,7 @@ import { useLanguage } from '../../i18n'
 
 const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba']
 
-export default function DeviceEditModal({ device, onSave, onClose, profiles = [], onOpenProfileManager }) {
+export default function DeviceEditModal({ device, onSave, onClose, profiles = [] }) {
   const { t } = useLanguage()
   const [form, setForm] = useState({
     hostname: device.hostname || '',
@@ -14,8 +14,11 @@ export default function DeviceEditModal({ device, onSave, onClose, profiles = []
     ssh_password: '',
     org_id: String(device.org_id || ''),
     site_id: String(device.site_id || ''),
+    credential_profile_id: device.credential_profile_id || null,
   })
-  const [selectedProfileId, setSelectedProfileId] = useState('')
+  const [selectedProfileId, setSelectedProfileId] = useState(
+    device.credential_profile_id ? String(device.credential_profile_id) : ''
+  )
   const [orgs, setOrgs] = useState([])
   const [sites, setSites] = useState([])
   const [loadingSites, setLoadingSites] = useState(false)
@@ -67,16 +70,10 @@ export default function DeviceEditModal({ device, onSave, onClose, profiles = []
   function handleProfileSelect(e) {
     const id = e.target.value
     setSelectedProfileId(id)
-    if (id) {
-      const profile = profiles.find(p => p.id === id)
-      if (profile) {
-        setForm(prev => ({
-          ...prev,
-          ssh_username: profile.ssh_username,
-          ssh_password: profile.ssh_password,
-        }))
-      }
-    }
+    setForm(prev => ({
+      ...prev,
+      credential_profile_id: id ? parseInt(id) : null,
+    }))
   }
 
   async function handleSubmit(e) {
@@ -90,6 +87,7 @@ export default function DeviceEditModal({ device, onSave, onClose, profiles = []
         vendor: form.vendor,
         ssh_username: form.ssh_username || null,
         site_id: form.site_id ? parseInt(form.site_id) : null,
+        credential_profile_id: form.credential_profile_id || null,
       }
       if (form.ssh_password) payload.ssh_password = form.ssh_password
       await onSave(payload)
@@ -163,42 +161,39 @@ export default function DeviceEditModal({ device, onSave, onClose, profiles = []
           <hr className="border-gray-100" />
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-gray-700">{t('credProfiles.selectLabel')}</label>
-              {onOpenProfileManager && (
-                <button
-                  type="button" onClick={onOpenProfileManager}
-                  className="text-xs text-blue-600 hover:underline font-medium"
-                >
-                  {t('credProfiles.manage')}
-                </button>
-              )}
-            </div>
+            <label className={labelCls}>{t('credProfiles.selectLabel')}</label>
             <select value={selectedProfileId} onChange={handleProfileSelect} className={inputCls}>
               <option value="">— {t('credProfiles.selectPlaceholder')} —</option>
-              {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {profiles.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({(p.connection_type || 'ssh').toUpperCase()} · {p.username} · port {p.port})
+                </option>
+              ))}
             </select>
+            {selectedProfileId && (
+              <p className="text-xs text-blue-600 mt-1">{t('credProfiles.profileActiveHint')}</p>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>{t('deviceForm.sshUser')}</label>
-              <input
-                type="text" name="ssh_username" value={form.ssh_username} onChange={handleChange}
-                disabled={profileActive}
-                className={`${inputCls} disabled:bg-gray-50 disabled:text-gray-400`}
-              />
+          {!selectedProfileId && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>{t('deviceForm.sshUser')}</label>
+                <input
+                  type="text" name="ssh_username" value={form.ssh_username} onChange={handleChange}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>{t('deviceForm.sshPass')}</label>
+                <input
+                  type="password" name="ssh_password" value={form.ssh_password} onChange={handleChange}
+                  placeholder={t('editModal.passwordPlaceholder')}
+                  className={inputCls}
+                />
+              </div>
             </div>
-            <div>
-              <label className={labelCls}>{t('deviceForm.sshPass')}</label>
-              <input
-                type="password" name="ssh_password" value={form.ssh_password} onChange={handleChange}
-                disabled={profileActive}
-                placeholder={profileActive ? '••••••' : t('editModal.passwordPlaceholder')}
-                className={`${inputCls} disabled:bg-gray-50 disabled:text-gray-400`}
-              />
-            </div>
-          </div>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

@@ -31,6 +31,7 @@ class UserOut(BaseModel):
     email: str | None
     role: str
     is_active: bool
+    mfa_enabled: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -56,3 +57,16 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str
+
+
+class MfaSetupRequest(BaseModel):
+    temp_token: str
+
+
+class MfaVerifyRequest(BaseModel):
+    temp_token: str
+    code: str
+
+
+class MfaResetRequest(BaseModel):
+    current_password: str | None = None

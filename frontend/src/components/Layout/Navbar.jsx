@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
 import { useLanguage } from '../../i18n'
@@ -17,6 +17,7 @@ const PAGE_TITLE_KEY = {
   '/schedulers': 'nav.schedulers',
   '/organizations': 'nav.locations',
   '/settings': 'nav.settings',
+  '/configlets': 'nav.configlets',
 }
 
 export default function Navbar() {
@@ -64,11 +65,6 @@ export default function Navbar() {
           <div className="flex items-center gap-2.5">
             <div className="text-right hidden sm:block">
               <p className="text-xs font-medium text-slate-800 leading-none">{user.username}</p>
-              {badge && (
-                <span className={`text-xs px-1.5 py-0.5 rounded font-medium mt-0.5 inline-block ${badge.cls}`}>
-                  {badge.label}
-                </span>
-              )}
             </div>
             <button
               onClick={() => setShowProfile(true)}
@@ -113,11 +109,17 @@ function ProfileModal({ user, onClose, onProfileSaved, t }) {
   const [pwdMsg, setPwdMsg] = useState(null)
   const [savingPwd, setSavingPwd] = useState(false)
 
+  const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [mfaResetPwd, setMfaResetPwd] = useState('')
+  const [mfaMsg, setMfaMsg] = useState(null)
+  const [resettingMfa, setResettingMfa] = useState(false)
+
   const isSuperAdmin = user?.role === 'super_administrator'
 
   useEffect(() => {
     authApi.getMe().then(({ data }) => {
       setProfile({ username: data.username, email: data.email || '' })
+      setMfaEnabled(data.mfa_enabled ?? false)
     }).catch(() => {})
   }, [])
 
@@ -154,6 +156,22 @@ function ProfileModal({ user, onClose, onProfileSaved, t }) {
       setPwdMsg({ type: 'error', text: err.response?.data?.detail || t('navbar.profile.pwdFail') })
     } finally {
       setSavingPwd(false)
+    }
+  }
+
+  async function handleMfaReset(e) {
+    e.preventDefault()
+    setResettingMfa(true)
+    setMfaMsg(null)
+    try {
+      await authApi.mfaReset(isSuperAdmin ? undefined : mfaResetPwd)
+      setMfaEnabled(false)
+      setMfaResetPwd('')
+      setMfaMsg({ type: 'success', text: t('navbar.profile.mfaResetOk') })
+    } catch (err) {
+      setMfaMsg({ type: 'error', text: err.response?.data?.detail || t('navbar.profile.mfaResetFail') })
+    } finally {
+      setResettingMfa(false)
     }
   }
 
@@ -270,6 +288,70 @@ function ProfileModal({ user, onClose, onProfileSaved, t }) {
                 {savingPwd ? t('common.saving') : t('navbar.profile.passwordSection')}
               </button>
             </form>
+          </div>
+
+          <hr className="border-gray-100" />
+
+          {/* MFA Güvenlik */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+              {t('navbar.profile.mfaSection')}
+            </p>
+
+            {/* Durum göstergesi */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                mfaEnabled ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${mfaEnabled ? 'bg-green-500' : 'bg-amber-500'}`} />
+                {mfaEnabled ? t('navbar.profile.mfaActive') : t('navbar.profile.mfaInactive')}
+              </span>
+            </div>
+
+            {mfaEnabled ? (
+              <form onSubmit={handleMfaReset} className="space-y-3">
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  {t('navbar.profile.mfaResetDesc')}
+                </p>
+                {!isSuperAdmin && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      {t('navbar.profile.currentPwd')}
+                    </label>
+                    <input
+                      type="password"
+                      value={mfaResetPwd}
+                      onChange={(e) => setMfaResetPwd(e.target.value)}
+                      required
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                    />
+                  </div>
+                )}
+                {mfaMsg && (
+                  <p className={`text-xs ${mfaMsg.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                    {mfaMsg.text}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={resettingMfa}
+                  className="w-full bg-red-600 text-white py-2 rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {resettingMfa ? t('common.saving') : t('navbar.profile.mfaReset')}
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-2">
+                {mfaMsg && (
+                  <p className={`text-xs ${mfaMsg.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                    {mfaMsg.text}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  {t('navbar.profile.mfaSetupHint')}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

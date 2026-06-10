@@ -6,8 +6,8 @@ from sqlalchemy import text
 
 from app.core.config import settings as app_settings
 from app.core.database import engine
-from app.routers import auth, devices, configs, schedulers, organizations, settings
-from app.services import job_scheduler
+from app.routers import auth, devices, configs, schedulers, organizations, settings, credential_profiles, configlets
+from app.services import job_scheduler, configlet_scheduler
 
 
 async def _load_settings_from_db():
@@ -38,12 +38,17 @@ async def _load_settings_from_db():
             app_settings.SMTP_PASSWORD = row[1]
         elif row[0] == "SMTP_FROM":
             app_settings.SMTP_FROM = row[1]
+        elif row[0] == "CHANGE_NOTIFY_ENABLED":
+            app_settings.CHANGE_NOTIFY_ENABLED = row[1].lower() == 'true'
+        elif row[0] == "CHANGE_NOTIFY_EMAILS":
+            app_settings.CHANGE_NOTIFY_EMAILS = row[1]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await _load_settings_from_db()
     await job_scheduler.start()
+    await configlet_scheduler.start()
     yield
     job_scheduler.stop()
 
@@ -69,6 +74,8 @@ app.include_router(configs.router, prefix="/configs", tags=["configs"])
 app.include_router(schedulers.router, prefix="/schedulers", tags=["schedulers"])
 app.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
 app.include_router(settings.router, prefix="/settings", tags=["settings"])
+app.include_router(credential_profiles.router, prefix="/credential-profiles", tags=["credential-profiles"])
+app.include_router(configlets.router, prefix="/configlets", tags=["configlets"])
 
 
 @app.get("/health")

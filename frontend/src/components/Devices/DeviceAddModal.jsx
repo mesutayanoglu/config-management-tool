@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useLanguage } from '../../i18n'
 import DeviceForm from './DeviceForm'
 
-export default function DeviceAddModal({ onSubmit, onClose, profiles, onOpenProfileManager }) {
+export default function DeviceAddModal({ onSubmit, onClose, profiles }) {
   const { t } = useLanguage()
 
   useEffect(() => {
@@ -35,7 +35,6 @@ export default function DeviceAddModal({ onSubmit, onClose, profiles, onOpenProf
             onSubmit={onSubmit}
             onCancel={onClose}
             profiles={profiles}
-            onOpenProfileManager={onOpenProfileManager}
           />
         </div>
 

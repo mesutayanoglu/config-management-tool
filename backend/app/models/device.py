@@ -22,4 +22,7 @@ class Device(Base):
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=True)
     site = relationship("Site", back_populates="devices")
 
+    credential_profile_id = Column(Integer, ForeignKey("credential_profiles.id"), nullable=True)
+    credential_profile = relationship("CredentialProfile")
+
     scheduler_devices = relationship("SchedulerDevice", back_populates="device")

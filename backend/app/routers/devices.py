@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user, get_write_user
+from app.models.credential_profile import CredentialProfile
 from app.models.device import Device
 from app.models.organization import Site, Organization  # modellerin kayıt sırası için
 from app.models.user import User
@@ -26,6 +27,7 @@ def _device_out(device: Device) -> DeviceOut:
         if device.site.organization:
             org_name = device.site.organization.name
             org_id = device.site.organization.id
+    profile_name = device.credential_profile.name if device.credential_profile else None
     return DeviceOut(
         id=device.id,
         device_uid=device.device_uid,
@@ -41,12 +43,15 @@ def _device_out(device: Device) -> DeviceOut:
         site_name=site_name,
         org_name=org_name,
         org_id=org_id,
+        credential_profile_id=device.credential_profile_id,
+        credential_profile_name=profile_name,
     )
 
 
 def _with_relations():
     return select(Device).options(
-        selectinload(Device.site).selectinload(Site.organization)
+        selectinload(Device.site).selectinload(Site.organization),
+        selectinload(Device.credential_profile),
     )
 
 
@@ -146,7 +151,10 @@ async def collect(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_write_user),
 ):
-    result = await db.execute(select(Device).where(Device.id == device_id))
+    result = await db.execute(
+        select(Device).options(selectinload(Device.credential_profile))
+        .where(Device.id == device_id)
+    )
     device = result.scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cihaz bulunamadı")
@@ -172,6 +180,16 @@ async def collect(
         device.version = result_data["version"]
     device.last_collected_at = datetime.now(timezone.utc)
     await db.commit()
+
+    if result_data.get("changed"):
+        from app.services.email_service import send_config_change_notification
+        await send_config_change_notification(
+            device.hostname,
+            device.ip_address,
+            result_data["old_content"],
+            result_data["new_content"],
+        )
+
     return {
         "device_id": device_id,
         "github_path": result_data["github_path"],

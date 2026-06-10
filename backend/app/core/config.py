@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
 
+    # Değişiklik bildirimleri
+    CHANGE_NOTIFY_ENABLED: bool = False
+    CHANGE_NOTIFY_EMAILS: str = ""
+
     # Uygulama ortamı — 'development' modda SMTP olmadan token log'a yazılır
     ENVIRONMENT: str = "production"
     FRONTEND_URL: str = "http://localhost"

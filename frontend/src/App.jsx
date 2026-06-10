@@ -9,6 +9,7 @@ import ConfigsPage from './pages/ConfigsPage'
 import SchedulersPage from './pages/SchedulersPage'
 import OrganizationsPage from './pages/OrganizationsPage'
 import SettingsPage from './pages/SettingsPage'
+import ConfigletsPage from './pages/ConfigletsPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import Sidebar from './components/Layout/Sidebar'
@@ -95,6 +96,16 @@ export default function App() {
             <PrivateRoute>
               <AppLayout>
                 <SettingsPage />
+              </AppLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/configlets"
+          element={
+            <PrivateRoute>
+              <AppLayout>
+                <ConfigletsPage />
               </AppLayout>
             </PrivateRoute>
           }

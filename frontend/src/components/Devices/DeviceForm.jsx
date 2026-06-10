@@ -10,7 +10,7 @@ const DEFAULT_COMMANDS = {
   aruba: 'show running-config',
 }
 
-export default function DeviceForm({ onSubmit, onCancel, profiles = [], onOpenProfileManager }) {
+export default function DeviceForm({ onSubmit, onCancel, profiles = [] }) {
   const { t } = useLanguage()
   const [form, setForm] = useState({
     hostname: '',
@@ -21,6 +21,7 @@ export default function DeviceForm({ onSubmit, onCancel, profiles = [], onOpenPr
     ssh_password: '',
     org_id: '',
     site_id: '',
+    credential_profile_id: null,
   })
   const [selectedProfileId, setSelectedProfileId] = useState('')
   const [orgs, setOrgs] = useState([])
@@ -57,16 +58,12 @@ export default function DeviceForm({ onSubmit, onCancel, profiles = [], onOpenPr
   function handleProfileSelect(e) {
     const id = e.target.value
     setSelectedProfileId(id)
-    if (id) {
-      const profile = profiles.find(p => p.id === id)
-      if (profile) {
-        setForm(prev => ({
-          ...prev,
-          ssh_username: profile.ssh_username,
-          ssh_password: profile.ssh_password,
-        }))
-      }
-    }
+    setForm(prev => ({
+      ...prev,
+      credential_profile_id: id ? parseInt(id) : null,
+      ssh_username: id ? '' : prev.ssh_username,
+      ssh_password: id ? '' : prev.ssh_password,
+    }))
   }
 
   async function handleSubmit(e) {
@@ -76,7 +73,11 @@ export default function DeviceForm({ onSubmit, onCancel, profiles = [], onOpenPr
     setSubmitting(true)
     try {
       const { org_id, ...payload } = form
-      await onSubmit({ ...payload, site_id: parseInt(form.site_id) })
+      await onSubmit({
+        ...payload,
+        site_id: parseInt(form.site_id),
+        credential_profile_id: form.credential_profile_id || null,
+      })
     } finally {
       setSubmitting(false)
     }
@@ -142,35 +143,32 @@ export default function DeviceForm({ onSubmit, onCancel, profiles = [], onOpenPr
       <hr className="border-gray-100" />
 
       <div>
-        <div className="flex items-center justify-between mb-1">
-          <label className={labelCls.replace('mb-1', '')}>{t('credProfiles.selectLabel')}</label>
-          {onOpenProfileManager && (
-            <button
-              type="button" onClick={onOpenProfileManager}
-              className="text-xs text-blue-600 hover:underline font-medium"
-            >
-              {t('credProfiles.manage')}
-            </button>
-          )}
-        </div>
+        <label className={labelCls}>{t('credProfiles.selectLabel')}</label>
         <select value={selectedProfileId} onChange={handleProfileSelect} className={inputCls}>
           <option value="">— {t('credProfiles.selectPlaceholder')} —</option>
-          {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {profiles.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.name} ({(p.connection_type || 'ssh').toUpperCase()} · {p.username} · port {p.port})
+            </option>
+          ))}
         </select>
+        {selectedProfileId && (
+          <p className="text-xs text-blue-600 mt-1">{t('credProfiles.profileActiveHint')}</p>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={labelCls}>{t('deviceForm.sshUser')}</label>
-          <input type="text" name="ssh_username" value={form.ssh_username} onChange={handleChange} className={inputCls} />
+      {!selectedProfileId && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>{t('deviceForm.sshUser')}</label>
+            <input type="text" name="ssh_username" value={form.ssh_username} onChange={handleChange} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>{t('deviceForm.sshPass')}</label>
+            <input type="password" name="ssh_password" value={form.ssh_password} onChange={handleChange} className={inputCls} />
+          </div>
         </div>
-        <div>
-          <label className={labelCls}>{t('deviceForm.sshPass')}</label>
-          <input type="password" name="ssh_password" value={form.ssh_password} onChange={handleChange} className={inputCls} />
-        </div>
-      </div>
-
-      <p className="text-xs text-gray-400">{t('deviceForm.autoFill')}</p>
+      )}
 
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={submitting}

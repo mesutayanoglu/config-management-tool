@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { settingsApi, authApi } from '../services/api'
+import { settingsApi, authApi, credentialProfilesApi } from '../services/api'
 import { useLanguage } from '../i18n'
 import useAuthStore from '../store/authStore'
 import Toast from '../components/Toast'
@@ -16,6 +16,8 @@ export default function SettingsPage() {
   const [hasSaved, setHasSaved] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [repoInfo, setRepoInfo] = useState(null)
+  const [showAdminCreate, setShowAdminCreate] = useState(false)
+  const [showProfileCreate, setShowProfileCreate] = useState(false)
 
   const isConnected = saved?.github_token === '***' && saved?.github_repo
 
@@ -276,7 +278,61 @@ export default function SettingsPage() {
         </SectionCard>
       )}
 
-      {/* ── Section 3: Administrators ── */}
+      {/* ── Section 3: Notifications ── */}
+      {!isReadOnly() && (
+        <SectionCard
+          icon={
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+          }
+          title={t('settings.sectionNotifications')}
+          description={t('settings.notify.description')}
+        >
+          <NotificationsSection setToast={setToast} t={t} />
+        </SectionCard>
+      )}
+
+      {/* ── Section 4: Credential Profiles ── */}
+      {!isReadOnly() && (
+        <SectionCard
+          icon={
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          }
+          title={t('credProfiles.title')}
+          description={t('credProfiles.sectionDesc')}
+          action={
+            <button
+              onClick={() => setShowProfileCreate(v => !v)}
+              className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${
+                showProfileCreate
+                  ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {showProfileCreate ? t('common.cancel') : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  {t('credProfiles.addNew')}
+                </>
+              )}
+            </button>
+          }
+        >
+          <CredentialProfilesSection
+            setToast={setToast}
+            t={t}
+            showCreate={showProfileCreate}
+            setShowCreate={setShowProfileCreate}
+          />
+        </SectionCard>
+      )}
+
+      {/* ── Section 5: Administrators ── */}
       {!isReadOnly() && (
         <SectionCard
           icon={
@@ -286,8 +342,27 @@ export default function SettingsPage() {
           }
           title={t('settings.sectionAdministrators')}
           description="Kullanıcı hesapları ve erişim rol yönetimi"
+          action={isSuperAdmin() && (
+            <button
+              onClick={() => setShowAdminCreate((v) => !v)}
+              className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${
+                showAdminCreate
+                  ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {showAdminCreate ? t('common.cancel') : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  {t('settings.admin.addUser')}
+                </>
+              )}
+            </button>
+          )}
         >
-          <AdministratorsSection setToast={setToast} t={t} canManage={isSuperAdmin()} />
+          <AdministratorsSection setToast={setToast} t={t} canManage={isSuperAdmin()} showCreate={showAdminCreate} setShowCreate={setShowAdminCreate} />
         </SectionCard>
       )}
 
@@ -300,17 +375,18 @@ export default function SettingsPage() {
 // Section Card Wrapper
 // ──────────────────────────────────────────────
 
-function SectionCard({ icon, title, description, children }) {
+function SectionCard({ icon, title, description, action, children }) {
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
       <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center gap-3">
         <div className="w-7 h-7 rounded-md border border-gray-200 bg-white flex items-center justify-center flex-shrink-0 text-gray-500">
           {icon}
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
           <p className="text-xs text-gray-500 mt-0.5">{description}</p>
         </div>
+        {action && <div className="flex-shrink-0">{action}</div>}
       </div>
       {children}
     </div>
@@ -514,17 +590,95 @@ const ROLE_BADGE_CLS = {
   read_only: 'bg-gray-100 text-gray-600',
 }
 
-function AdministratorsSection({ setToast, t, canManage }) {
+function NotificationsSection({ setToast, t }) {
+  const [form, setForm] = useState({ enabled: false, emails: '' })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    settingsApi.getNotifications().then(({ data }) => {
+      setForm({ enabled: data.enabled, emails: data.emails || '' })
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await settingsApi.saveNotifications({ enabled: form.enabled, emails: form.emails })
+      setToast({ message: t('settings.notify.saveOk'), type: 'success' })
+    } catch {
+      setToast({ message: t('settings.notify.saveFail'), type: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <p className="text-sm text-gray-400 px-6 py-6">{t('common.loading')}</p>
+
+  return (
+    <form onSubmit={handleSave} className="px-6 py-5 space-y-5">
+      {/* Toggle */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-700">{t('settings.notify.enabled')}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setForm(p => ({ ...p, enabled: !p.enabled }))}
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+            form.enabled ? 'bg-blue-600' : 'bg-gray-200'
+          }`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+              form.enabled ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* Email adresleri */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          {t('settings.notify.emails')}
+        </label>
+        <input
+          type="text"
+          value={form.emails}
+          onChange={e => setForm(p => ({ ...p, emails: e.target.value }))}
+          placeholder={t('settings.notify.emailsPlaceholder')}
+          disabled={!form.enabled}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40 disabled:bg-gray-50"
+        />
+        <p className="text-xs text-gray-400 mt-1">{t('settings.notify.emailsHint')}</p>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={saving}
+          className="text-sm bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
+        >
+          {saving ? t('common.saving') : t('common.save')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+
+function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCreate }) {
   const { user: currentUser } = useAuthStore()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({ username: '', password: '', email: '', role: 'admin' })
   const [creating, setCreating] = useState(false)
   const [passwordModal, setPasswordModal] = useState(null)
   const [newPassword, setNewPassword] = useState('')
   const [changingPwd, setChangingPwd] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [resettingMfaId, setResettingMfaId] = useState(null)
 
   async function loadUsers() {
     try {
@@ -595,35 +749,22 @@ function AdministratorsSection({ setToast, t, canManage }) {
     }
   }
 
+  async function handleMfaReset(userId) {
+    setResettingMfaId(userId)
+    try {
+      await authApi.mfaResetUser(userId)
+      setToast({ message: t('settings.admin.mfaResetOk'), type: 'success' })
+      loadUsers()
+    } catch (err) {
+      const detail = err.response?.data?.detail || t('settings.admin.mfaResetFail')
+      setToast({ message: detail, type: 'error' })
+    } finally {
+      setResettingMfaId(null)
+    }
+  }
+
   return (
     <div>
-      {/* Toolbar */}
-      <div className="px-6 py-3 border-b border-gray-100 flex items-center justify-between bg-white">
-        <p className="text-xs text-gray-500">
-          {loading ? t('common.loading') : `${users.length} kullanıcı`}
-        </p>
-        {canManage && (
-          <button
-            onClick={() => setShowCreate((v) => !v)}
-            className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${
-              showCreate
-                ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            {showCreate ? (
-              t('common.cancel')
-            ) : (
-              <>
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                {t('settings.admin.addUser')}
-              </>
-            )}
-          </button>
-        )}
-      </div>
 
       {/* Create Form */}
       {canManage && showCreate && (
@@ -739,14 +880,14 @@ function AdministratorsSection({ setToast, t, canManage }) {
                     <select
                       value={u.role}
                       onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-md border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${ROLE_BADGE_CLS[u.role] || 'bg-gray-100 text-gray-600'}`}
+                      className="text-xs text-gray-700 px-2.5 py-1 rounded-md border border-gray-200 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       {ROLES.map((r) => (
                         <option key={r} value={r}>{t(`settings.admin.role.${r}`)}</option>
                       ))}
                     </select>
                   ) : (
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-md ${ROLE_BADGE_CLS[u.role] || 'bg-gray-100 text-gray-600'}`}>
+                    <span className="text-xs text-gray-700 px-2.5 py-1 rounded-md border border-gray-200 bg-white">
                       {t(`settings.admin.role.${u.role}`)}
                     </span>
                   )}
@@ -759,7 +900,7 @@ function AdministratorsSection({ setToast, t, canManage }) {
                     <div className="flex items-center gap-3 justify-end">
                       <button
                         onClick={() => { setPasswordModal({ userId: u.id, username: u.username }); setNewPassword('') }}
-                        className="text-xs text-gray-500 hover:text-blue-600 transition-colors font-medium"
+                        className="text-xs text-gray-500 hover:text-blue-600 transition-colors font-medium whitespace-nowrap"
                       >
                         {t('settings.admin.changePassword')}
                       </button>
@@ -838,6 +979,411 @@ function AdministratorsSection({ setToast, t, canManage }) {
           onCancel={() => setDeleteConfirm(null)}
         />
       )}
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────
+// Credential Profiles Section
+// ──────────────────────────────────────────────
+
+const KEX_ALGS = [
+  { name: 'curve25519-sha256', legacy: false },
+  { name: 'curve25519-sha256@libssh.org', legacy: false },
+  { name: 'ecdh-sha2-nistp256', legacy: false },
+  { name: 'ecdh-sha2-nistp384', legacy: false },
+  { name: 'ecdh-sha2-nistp521', legacy: false },
+  { name: 'diffie-hellman-group16-sha512', legacy: false },
+  { name: 'diffie-hellman-group14-sha256', legacy: false },
+  { name: 'diffie-hellman-group-exchange-sha256', legacy: false },
+  { name: 'diffie-hellman-group14-sha1', legacy: true },
+  { name: 'diffie-hellman-group-exchange-sha1', legacy: true },
+  { name: 'diffie-hellman-group1-sha1', legacy: true },
+]
+
+const HOST_KEY_ALGS = [
+  { name: 'ssh-ed25519', legacy: false },
+  { name: 'ecdsa-sha2-nistp256', legacy: false },
+  { name: 'ecdsa-sha2-nistp384', legacy: false },
+  { name: 'ecdsa-sha2-nistp521', legacy: false },
+  { name: 'rsa-sha2-512', legacy: false },
+  { name: 'rsa-sha2-256', legacy: false },
+  { name: 'ssh-rsa', legacy: true },
+  { name: 'ssh-dss', legacy: true },
+]
+
+const CIPHER_ALGS = [
+  { name: 'aes256-ctr', legacy: false },
+  { name: 'aes192-ctr', legacy: false },
+  { name: 'aes128-ctr', legacy: false },
+  { name: 'aes256-gcm@openssh.com', legacy: false },
+  { name: 'aes128-gcm@openssh.com', legacy: false },
+  { name: 'chacha20-poly1305@openssh.com', legacy: false },
+  { name: '3des-cbc', legacy: true },
+]
+
+const DEFAULT_KEX = KEX_ALGS.filter(a => !a.legacy).map(a => a.name)
+const DEFAULT_HOST_KEY = HOST_KEY_ALGS.filter(a => !a.legacy).map(a => a.name)
+const DEFAULT_CIPHER = CIPHER_ALGS.filter(a => !a.legacy).map(a => a.name)
+
+function emptyProfileForm(connType = 'ssh') {
+  return {
+    name: '',
+    description: '',
+    connection_type: connType,
+    username: '',
+    password: '',
+    port: connType === 'telnet' ? 23 : 22,
+    enable_secret: '',
+    kex_algs: DEFAULT_KEX,
+    host_key_algs: DEFAULT_HOST_KEY,
+    cipher_algs: DEFAULT_CIPHER,
+  }
+}
+
+function CredentialProfilesSection({ setToast, t, showCreate, setShowCreate }) {
+  const [profiles, setProfiles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(emptyProfileForm())
+  const [saving, setSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [showAlgos, setShowAlgos] = useState(false)
+
+  // showCreate header butonunu da kontrol eder: true=form açık, false=kapalı
+  const showForm = showCreate
+
+  async function load() {
+    try {
+      const { data } = await credentialProfilesApi.list()
+      setProfiles(data)
+    } catch {
+      setToast({ message: t('credProfiles.toast.error'), type: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  // Header "İptal" → showCreate=false → editingId ve formu temizle
+  useEffect(() => {
+    if (!showCreate) {
+      setEditingId(null)
+      setForm(emptyProfileForm())
+      setShowAlgos(false)
+    }
+  }, [showCreate])
+
+  function startEdit(p) {
+    setEditingId(p.id)
+    setShowCreate(true)  // header butonu "İptal" göstersin
+    setForm({
+      name: p.name || '',
+      description: p.description || '',
+      connection_type: p.connection_type || 'ssh',
+      username: p.username || '',
+      password: '',
+      port: p.port ?? 22,
+      enable_secret: '',
+      kex_algs: p.kex_algs ?? DEFAULT_KEX,
+      host_key_algs: p.host_key_algs ?? DEFAULT_HOST_KEY,
+      cipher_algs: p.cipher_algs ?? DEFAULT_CIPHER,
+    })
+    setShowAlgos(false)
+  }
+
+  function resetForm() {
+    setShowCreate(false)  // useEffect geri kalanı temizler
+  }
+
+  function setConnType(ct) {
+    setForm(prev => ({
+      ...prev,
+      connection_type: ct,
+      port: (prev.port === 22 && ct === 'telnet') ? 23
+           : (prev.port === 23 && ct === 'ssh') ? 22
+           : prev.port,
+    }))
+  }
+
+  function toggleAlg(field, name) {
+    setForm(prev => {
+      const list = prev[field] || []
+      return { ...prev, [field]: list.includes(name) ? list.filter(a => a !== name) : [...list, name] }
+    })
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    const isSsh = form.connection_type === 'ssh'
+    try {
+      const payload = {
+        name: form.name,
+        description: form.description || null,
+        connection_type: form.connection_type,
+        username: form.username,
+        password: form.password || undefined,
+        port: parseInt(form.port) || (isSsh ? 22 : 23),
+        enable_secret: form.enable_secret || null,
+        kex_algs: isSsh && form.kex_algs.length ? form.kex_algs : null,
+        host_key_algs: isSsh && form.host_key_algs.length ? form.host_key_algs : null,
+        cipher_algs: isSsh && form.cipher_algs.length ? form.cipher_algs : null,
+      }
+      if (editingId) {
+        if (!payload.password) delete payload.password
+        await credentialProfilesApi.update(editingId, payload)
+        setToast({ message: t('credProfiles.toast.updated'), type: 'success' })
+      } else {
+        if (!payload.password) { setToast({ message: t('credProfiles.toast.error'), type: 'error' }); setSaving(false); return }
+        await credentialProfilesApi.create(payload)
+        setToast({ message: t('credProfiles.toast.created'), type: 'success' })
+      }
+      resetForm()
+      await load()
+    } catch (err) {
+      const detail = err?.response?.data?.detail || t('credProfiles.toast.error')
+      setToast({ message: detail, type: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(id) {
+    try {
+      await credentialProfilesApi.remove(id)
+      setToast({ message: t('credProfiles.toast.deleted'), type: 'success' })
+      setDeleteConfirm(null)
+      resetForm()
+      await load()
+    } catch (err) {
+      const detail = err?.response?.data?.detail || t('credProfiles.toast.error')
+      setToast({ message: detail, type: 'error' })
+    }
+  }
+
+  const inputCls = 'w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const labelCls = 'block text-xs font-medium text-gray-600 mb-1'
+  const isSsh = form.connection_type === 'ssh'
+
+  return (
+    <div>
+      {/* ── Form (create / edit) — sadece açıkken göster ── */}
+      {showForm && (
+        <div className="border-b border-gray-200">
+
+          {/* Form sub-header: başlık + SSH/Telnet sekmeleri */}
+          <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-b border-gray-100">
+            <span className="text-sm font-semibold text-gray-800">
+              {editingId ? t('credProfiles.editHint') : t('credProfiles.addNew')}
+            </span>
+            <div className="flex items-center gap-3">
+              <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm font-medium">
+                <button type="button" onClick={() => setConnType('ssh')}
+                  className={`px-4 py-1.5 transition-colors ${isSsh ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                  SSH
+                </button>
+                <button type="button" onClick={() => setConnType('telnet')}
+                  className={`px-4 py-1.5 border-l border-gray-300 transition-colors ${!isSsh ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                  Telnet
+                </button>
+              </div>
+              {editingId && (
+                <button onClick={() => setDeleteConfirm({ id: editingId, name: form.name })}
+                  className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium">
+                  {t('common.delete')}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Telnet uyarısı */}
+          {!isSsh && (
+            <div className="flex items-center gap-2 px-6 py-2.5 bg-amber-50 border-b border-amber-100">
+              <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="text-xs text-amber-700">{t('credProfiles.telnetNote')}</p>
+            </div>
+          )}
+
+          {/* Form alanları */}
+          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>{t('credProfiles.profileName')} <span className="text-red-500">*</span></label>
+                <input type="text" required value={form.name}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>{isSsh ? 'SSH Port' : 'Telnet Port'}</label>
+                <input type="number" min="1" max="65535" value={form.port}
+                  onChange={e => setForm(p => ({ ...p, port: e.target.value }))} className={inputCls} />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>{t('credProfiles.description')}</label>
+              <input type="text" value={form.description}
+                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                placeholder={t('credProfiles.descPlaceholder')} className={inputCls} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>{t('credProfiles.username')} <span className="text-red-500">*</span></label>
+                <input type="text" required value={form.username}
+                  onChange={e => setForm(p => ({ ...p, username: e.target.value }))} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>
+                  {t('credProfiles.password')}
+                  {editingId
+                    ? <span className="text-gray-400 font-normal ml-1">({t('common.optional')})</span>
+                    : <span className="text-red-500"> *</span>}
+                </label>
+                <input type="password" required={!editingId} value={form.password}
+                  onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                  placeholder={editingId ? t('editModal.passwordPlaceholder') : ''} className={inputCls} />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>
+                {t('credProfiles.enableSecret')}
+                <span className="text-gray-400 font-normal ml-1">({t('common.optional')})</span>
+              </label>
+              <input type="password" value={form.enable_secret}
+                onChange={e => setForm(p => ({ ...p, enable_secret: e.target.value }))}
+                placeholder={editingId ? t('editModal.passwordPlaceholder') : ''} className={inputCls} />
+              <p className="text-xs text-gray-400 mt-1">{t('credProfiles.enableSecretHint')}</p>
+            </div>
+
+            {/* SSH Algoritmaları — sadece SSH'ta */}
+            {isSsh && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button type="button" onClick={() => setShowAlgos(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
+                  <span className="text-sm font-medium text-gray-700">{t('credProfiles.sshAlgos')}</span>
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${showAlgos ? 'rotate-180' : ''}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showAlgos && (
+                  <div className="p-4 space-y-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-400">{t('credProfiles.algosHint')}</p>
+                    <AlgGroup label={t('credProfiles.kexAlgos')} algs={KEX_ALGS} selected={form.kex_algs} onToggle={name => toggleAlg('kex_algs', name)} />
+                    <AlgGroup label={t('credProfiles.hostKeyAlgos')} algs={HOST_KEY_ALGS} selected={form.host_key_algs} onToggle={name => toggleAlg('host_key_algs', name)} />
+                    <AlgGroup label={t('credProfiles.cipherAlgos')} algs={CIPHER_ALGS} selected={form.cipher_algs} onToggle={name => toggleAlg('cipher_algs', name)} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Butonlar — sağ hizalı */}
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button type="button" onClick={resetForm}
+                className="border border-gray-300 text-gray-600 px-5 py-2 rounded-md text-sm hover:bg-gray-50 transition-colors">
+                {t('common.cancel')}
+              </button>
+              <button type="submit" disabled={saving}
+                className="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {saving ? t('common.saving') : t('common.save')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── Kayıtlı Profiller listesi ── */}
+      <div className="px-6 py-5">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          {t('credProfiles.savedProfiles')}
+        </p>
+
+        {loading ? (
+          <p className="text-sm text-gray-400 py-6 text-center">{t('common.loading')}</p>
+        ) : profiles.length === 0 ? (
+          <div className="border border-dashed border-gray-300 rounded-lg py-10 text-center">
+            <p className="text-sm text-gray-400">{t('credProfiles.empty')}</p>
+          </div>
+        ) : (
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('credProfiles.profileName')}</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('credProfiles.colType')}</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('credProfiles.colUser')}</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('credProfiles.colPort')}</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Enable</th>
+                  <th className="px-4 py-2.5 w-20"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {profiles.map(p => (
+                  <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${editingId === p.id ? 'bg-blue-50' : ''}`}>
+                    <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${
+                        (p.connection_type || 'ssh') === 'ssh' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {(p.connection_type || 'ssh').toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{p.username}</td>
+                    <td className="px-4 py-3 text-gray-600">{p.port}</td>
+                    <td className="px-4 py-3">
+                      {p.enable_secret
+                        ? <span className="text-xs text-green-600 font-medium">✓</span>
+                        : <span className="text-xs text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => startEdit(p)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors">
+                        {t('credProfiles.edit')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {deleteConfirm && (
+        <ConfirmModal
+          title={t('credProfiles.deleteTitle')}
+          message={`"${deleteConfirm.name}" ${t('credProfiles.deleteConfirm')}`}
+          onConfirm={() => handleDelete(deleteConfirm.id)}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function AlgGroup({ label, algs, selected, onToggle }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-600 mb-2">{label}</p>
+      <div className="grid grid-cols-2 gap-1">
+        {algs.map(alg => (
+          <label key={alg.name} className="flex items-center gap-2 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={selected?.includes(alg.name) ?? false}
+              onChange={() => onToggle(alg.name)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className={`text-xs font-mono truncate ${alg.legacy ? 'text-amber-600' : 'text-gray-700'}`}>{alg.name}</span>
+            {alg.legacy && <span className="text-xs text-amber-500 flex-shrink-0">(legacy)</span>}
+          </label>
+        ))}
+      </div>
     </div>
   )
 }

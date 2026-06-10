@@ -28,11 +28,28 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def create_temp_token(user_id: int) -> str:
+    """Short-lived token (5 min) for MFA verification step — not usable as an access token."""
+    data = {
+        "sub": str(user_id),
+        "type": "mfa_temp",
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+    }
+    return jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
 def decode_access_token(token: str) -> dict | None:
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except JWTError:
         return None
+
+
+def decode_temp_token(token: str) -> dict | None:
+    payload = decode_access_token(token)
+    if payload is None or payload.get("type") != "mfa_temp":
+        return None
+    return payload
 
 
 async def get_current_user(
@@ -47,7 +64,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     payload = decode_access_token(token)
-    if payload is None:
+    if payload is None or payload.get("type") == "mfa_temp":
         raise credentials_exception
 
     user_id = payload.get("sub")

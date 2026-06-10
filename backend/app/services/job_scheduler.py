@@ -70,18 +70,30 @@ async def _run_job(scheduler_id: int):
                 logger.warning("[Scheduler id=%d] Not found or inactive — skipping", scheduler_id)
                 return
 
+            from app.models.credential_profile import CredentialProfile  # noqa: F401
             if s.target_type == "manual":
                 devices = [sd.device for sd in s.scheduler_devices if sd.device]
+                # credential_profile yüklü değilse ayrı sorgu ile al
+                device_ids = [d.id for d in devices]
+                res = await db.execute(
+                    select(Device)
+                    .options(selectinload(Device.credential_profile))
+                    .where(Device.id.in_(device_ids))
+                )
+                devices = res.scalars().all()
             elif s.target_type == "org":
                 res = await db.execute(
                     select(Device)
+                    .options(selectinload(Device.credential_profile))
                     .join(Device.site)
                     .where(Site.organization_id == s.target_org_id)
                 )
                 devices = res.scalars().all()
             elif s.target_type == "site":
                 res = await db.execute(
-                    select(Device).where(Device.site_id == s.target_site_id)
+                    select(Device)
+                    .options(selectinload(Device.credential_profile))
+                    .where(Device.site_id == s.target_site_id)
                 )
                 devices = res.scalars().all()
             else:
@@ -89,10 +101,11 @@ async def _run_job(scheduler_id: int):
 
             logger.warning("[Scheduler:%s] Running for %d device(s)", s.name, len(devices))
 
+            from app.services.email_service import send_config_change_notification
             job_results = []
             for device in devices:
                 try:
-                    await collect_config(device)
+                    result_data = await collect_config(device)
                     logger.warning("[Scheduler:%s] OK — %s", s.name, device.hostname)
                     job_results.append({
                         "hostname": device.hostname,
@@ -100,6 +113,13 @@ async def _run_job(scheduler_id: int):
                         "status": device.status,
                         "backup_ok": True,
                     })
+                    if result_data.get("changed"):
+                        await send_config_change_notification(
+                            device.hostname,
+                            device.ip_address,
+                            result_data["old_content"],
+                            result_data["new_content"],
+                        )
                 except Exception as exc:
                     logger.warning("[Scheduler:%s] FAIL — %s: %s", s.name, device.hostname, exc)
                     job_results.append({

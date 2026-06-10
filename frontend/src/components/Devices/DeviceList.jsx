@@ -108,10 +108,11 @@ export default function DeviceList({
                   {!readOnly && (
                     <div className="flex items-center gap-2">
 
-                      {/* Config Al */}
+                      {/* İndir */}
                       <button
                         onClick={() => onCollect(d.id)}
                         disabled={isCollecting}
+                        title="Mevcut konfigürasyonu indirir."
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors
                           ${isCollecting
                             ? 'border-blue-200 bg-blue-50 text-blue-400 cursor-not-allowed'

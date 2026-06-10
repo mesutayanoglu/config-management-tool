@@ -1,13 +1,18 @@
+import base64
+import io
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import pyotp
+import segno
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
 from app.core.security import (
-    create_access_token, hash_password, verify_password,
+    create_access_token, create_temp_token, decode_temp_token,
+    hash_password, verify_password,
     get_admin_user, get_current_user, get_super_admin_user,
 )
 from app.models.user import User
@@ -16,6 +21,7 @@ from app.schemas.auth import (
     LoginRequest, TokenResponse, UserCreate, UserOut, UserInfo,
     UserUpdatePassword, UserUpdateRole, UserUpdateProfile,
     PasswordResetRequest, PasswordResetConfirm,
+    MfaSetupRequest, MfaVerifyRequest, MfaResetRequest,
 )
 
 router = APIRouter()
@@ -23,17 +29,118 @@ router = APIRouter()
 VALID_ROLES = {'super_administrator', 'admin', 'read_only'}
 
 
-@router.post("/login", response_model=TokenResponse)
+def _make_token_response(user: User) -> TokenResponse:
+    token = create_access_token({"sub": str(user.id), "username": user.username, "role": user.role})
+    return TokenResponse(access_token=token, user=UserInfo(id=user.id, username=user.username, role=user.role))
+
+
+def _generate_qr_data_url(uri: str) -> str:
+    qr = segno.make_qr(uri)
+    buf = io.BytesIO()
+    qr.save(buf, kind="svg", scale=5, border=2)
+    svg_b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/svg+xml;base64,{svg_b64}"
+
+
+@router.post("/login")
 async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.username == body.username))
     user = result.scalar_one_or_none()
     if not user or not user.is_active or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Hatalı kullanıcı adı veya şifre")
-    token = create_access_token({"sub": str(user.id), "username": user.username, "role": user.role})
-    return TokenResponse(
-        access_token=token,
-        user=UserInfo(id=user.id, username=user.username, role=user.role),
-    )
+
+    if user.mfa_enabled and user.totp_secret:
+        temp_token = create_temp_token(user.id)
+        return {"status": "mfa_required", "temp_token": temp_token}
+
+    # MFA not yet set up — require first-time setup
+    temp_token = create_temp_token(user.id)
+    return {"status": "mfa_setup_required", "temp_token": temp_token}
+
+
+@router.post("/mfa/setup")
+async def mfa_setup(body: MfaSetupRequest, db: AsyncSession = Depends(get_db)):
+    """Generate a new TOTP secret and QR code. Called during first-time MFA setup."""
+    payload = decode_temp_token(body.temp_token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz veya süresi dolmuş oturum")
+
+    result = await db.execute(select(User).where(User.id == int(payload["sub"])))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Kullanıcı bulunamadı")
+
+    secret = pyotp.random_base32()
+    uri = pyotp.TOTP(secret).provisioning_uri(name=user.username, issuer_name="CMT")
+    qr_data_url = _generate_qr_data_url(uri)
+
+    user.totp_secret = secret
+    user.mfa_enabled = False
+    await db.commit()
+
+    return {"uri": uri, "qr_data_url": qr_data_url}
+
+
+@router.post("/mfa/enable", response_model=TokenResponse)
+async def mfa_enable(body: MfaVerifyRequest, db: AsyncSession = Depends(get_db)):
+    """Verify first TOTP code during setup. Enables MFA and returns full access token."""
+    payload = decode_temp_token(body.temp_token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz veya süresi dolmuş oturum")
+
+    result = await db.execute(select(User).where(User.id == int(payload["sub"])))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active or not user.totp_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Kurulum başlatılmamış")
+
+    totp = pyotp.TOTP(user.totp_secret)
+    if not totp.verify(body.code, valid_window=1):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Geçersiz doğrulama kodu")
+
+    user.mfa_enabled = True
+    await db.commit()
+    return _make_token_response(user)
+
+
+@router.post("/mfa/verify", response_model=TokenResponse)
+async def mfa_verify(body: MfaVerifyRequest, db: AsyncSession = Depends(get_db)):
+    """Verify TOTP code on normal login. Returns full access token."""
+    payload = decode_temp_token(body.temp_token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Geçersiz veya süresi dolmuş oturum")
+
+    result = await db.execute(select(User).where(User.id == int(payload["sub"])))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active or not user.totp_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Kullanıcı bulunamadı")
+
+    totp = pyotp.TOTP(user.totp_secret)
+    if not totp.verify(body.code, valid_window=1):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Geçersiz doğrulama kodu")
+
+    return _make_token_response(user)
+
+
+@router.post("/mfa/reset")
+async def mfa_reset(
+    body: MfaResetRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reset own MFA. Requires current password (super_admin exempt)."""
+    if current_user.role != 'super_administrator':
+        if not body.current_password or not verify_password(body.current_password, current_user.hashed_password):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mevcut şifre hatalı")
+
+    current_user.totp_secret = None
+    current_user.mfa_enabled = False
+    await db.commit()
+    return {"status": "ok"}
+
+
+@router.get("/mfa/status")
+async def mfa_status(current_user: User = Depends(get_current_user)):
+    return {"mfa_enabled": current_user.mfa_enabled}
 
 
 @router.get("/me", response_model=UserOut)
@@ -151,7 +258,6 @@ async def update_password(
         if current_user.role != 'super_administrator':
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetki yok")
     else:
-        # Kendi şifresini değiştiriyor — super_admin hariç current_password zorunlu
         if current_user.role != 'super_administrator':
             if not body.current_password or not verify_password(body.current_password, target.hashed_password):
                 raise HTTPException(
@@ -211,7 +317,6 @@ async def forgot_password(body: PasswordResetRequest, db: AsyncSession = Depends
 
     smtp_configured = bool(settings.SMTP_HOST and settings.SMTP_FROM)
 
-    # Production'da SMTP yapılandırılmamışsa kullanıcıya net hata ver
     if not smtp_configured and settings.ENVIRONMENT != "development":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -230,7 +335,6 @@ async def forgot_password(body: PasswordResetRequest, db: AsyncSession = Depends
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
         await send_password_reset_email(user.email, reset_link, token)
 
-    # Her durumda aynı yanıt — kullanıcı adı/e-posta varlığı sızdırılmaz
     return {"message": "Şifre sıfırlama talebi alındı. E-posta adresinizi kontrol edin."}
 
 

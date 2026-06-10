@@ -46,11 +46,6 @@ function DeviceRow({ device, selected, onToggle, indent = 'pl-16' }) {
       }`} />
       <span className="text-xs font-medium text-gray-700 flex-1 truncate min-w-0">{device.hostname}</span>
       <span className="text-xs text-gray-400 font-mono flex-shrink-0 hidden sm:block">{device.ip_address}</span>
-      {device.vendor && (
-        <span className={`text-xs flex-shrink-0 font-medium ${VENDOR_COLOR[device.vendor?.toLowerCase()] || 'text-gray-400'}`}>
-          {device.vendor}
-        </span>
-      )}
     </div>
   )
 }

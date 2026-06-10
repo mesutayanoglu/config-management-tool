@@ -1,41 +1,36 @@
-import { useState, useCallback } from 'react'
-
-const STORAGE_KEY = 'credential_profiles'
-
-function load() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
-}
-
-function persist(profiles) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles))
-}
+import { useState, useEffect, useCallback } from 'react'
+import { credentialProfilesApi } from '../services/api'
 
 export default function useCredentialProfiles() {
-  const [profiles, setProfiles] = useState(load)
+  const [profiles, setProfiles] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const add = useCallback((name, ssh_username, ssh_password) => {
-    setProfiles(prev => {
-      const next = [...prev, { id: crypto.randomUUID(), name, ssh_username, ssh_password }]
-      persist(next)
-      return next
-    })
+  const reload = useCallback(async () => {
+    try {
+      const { data } = await credentialProfilesApi.list()
+      setProfiles(data)
+    } catch {}
+    finally { setLoading(false) }
   }, [])
 
-  const update = useCallback((id, data) => {
-    setProfiles(prev => {
-      const next = prev.map(p => p.id === id ? { ...p, ...data } : p)
-      persist(next)
-      return next
-    })
+  useEffect(() => { reload() }, [reload])
+
+  const add = useCallback(async (profileData) => {
+    const { data } = await credentialProfilesApi.create(profileData)
+    setProfiles(prev => [...prev, data])
+    return data
   }, [])
 
-  const remove = useCallback((id) => {
-    setProfiles(prev => {
-      const next = prev.filter(p => p.id !== id)
-      persist(next)
-      return next
-    })
+  const update = useCallback(async (id, profileData) => {
+    const { data } = await credentialProfilesApi.update(id, profileData)
+    setProfiles(prev => prev.map(p => p.id === id ? data : p))
+    return data
   }, [])
 
-  return { profiles, add, update, remove }
+  const remove = useCallback(async (id) => {
+    await credentialProfilesApi.remove(id)
+    setProfiles(prev => prev.filter(p => p.id !== id))
+  }, [])
+
+  return { profiles, loading, reload, add, update, remove }
 }

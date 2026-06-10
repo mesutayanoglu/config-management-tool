@@ -35,6 +35,11 @@ export const authApi = {
   updateRole: (id, data) => api.put(`/auth/users/${id}/role`, data),
   forgotPassword: (data) => api.post('/auth/forgot-password', data),
   resetPassword: (data) => api.post('/auth/reset-password', data),
+  mfaSetup: (temp_token) => api.post('/auth/mfa/setup', { temp_token }),
+  mfaEnable: (temp_token, code) => api.post('/auth/mfa/enable', { temp_token, code }),
+  mfaVerify: (temp_token, code) => api.post('/auth/mfa/verify', { temp_token, code }),
+  mfaReset: (current_password) => api.post('/auth/mfa/reset', { current_password }),
+  mfaStatus: () => api.get('/auth/mfa/status'),
 }
 
 export const devicesApi = {
@@ -71,6 +76,22 @@ export const organizationsApi = {
   removeSite: (orgId, siteId) => api.delete(`/organizations/${orgId}/sites/${siteId}`),
 }
 
+export const credentialProfilesApi = {
+  list: () => api.get('/credential-profiles/'),
+  create: (data) => api.post('/credential-profiles/', data),
+  update: (id, data) => api.patch(`/credential-profiles/${id}`, data),
+  remove: (id) => api.delete(`/credential-profiles/${id}`),
+}
+
+export const configletsApi = {
+  list: () => api.get('/configlets/'),
+  get: (id) => api.get(`/configlets/${id}`),
+  create: (data) => api.post('/configlets/', data),
+  update: (id, data) => api.patch(`/configlets/${id}`, data),
+  remove: (id) => api.delete(`/configlets/${id}`),
+  execute: (id, data) => api.post(`/configlets/${id}/execute`, data),
+}
+
 export const settingsApi = {
   get: () => api.get('/settings/'),
   save: (data) => api.post('/settings/', data),
@@ -78,6 +99,8 @@ export const settingsApi = {
   getSmtp: () => api.get('/settings/smtp'),
   saveSmtp: (data) => api.post('/settings/smtp', data),
   testSmtp: () => api.post('/settings/test-smtp'),
+  getNotifications: () => api.get('/settings/notifications'),
+  saveNotifications: (data) => api.post('/settings/notifications', data),
 }
 
 export default api

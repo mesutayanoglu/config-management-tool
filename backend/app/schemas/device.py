@@ -10,6 +10,7 @@ class DeviceCreate(BaseModel):
     ssh_username: str | None = None
     ssh_password: str | None = None
     site_id: int | None = None
+    credential_profile_id: int | None = None
 
 
 class DeviceUpdate(BaseModel):
@@ -22,6 +23,7 @@ class DeviceUpdate(BaseModel):
     ssh_username: str | None = None
     ssh_password: str | None = None
     site_id: int | None = None
+    credential_profile_id: int | None = None
 
 
 class DeviceOut(BaseModel):
@@ -39,5 +41,7 @@ class DeviceOut(BaseModel):
     site_name: str | None = None
     org_name: str | None = None
     org_id: int | None = None
+    credential_profile_id: int | None = None
+    credential_profile_name: str | None = None
 
     model_config = {"from_attributes": True}
