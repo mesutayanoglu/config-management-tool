@@ -314,6 +314,15 @@ const tr = {
   'settings.admin.role.super_administrator': 'Super Administrator',
   'settings.admin.role.admin': 'Admin',
   'settings.admin.role.read_only': 'Read Only',
+  'settings.admin.colMfa': 'MFA',
+  'settings.admin.mfaActive': 'Aktif',
+  'settings.admin.mfaInactive': 'Pasif',
+  'settings.admin.resetMfa': 'MFA Sıfırla',
+  'settings.admin.mfaResetOk': 'MFA sıfırlandı. Kullanıcı sonraki girişte yeniden kurulum yapacak.',
+  'settings.admin.mfaResetFail': 'MFA sıfırlanamadı.',
+  'settings.admin.editUser': 'Düzenle',
+  'settings.admin.editOk': 'Kullanıcı bilgileri güncellendi.',
+  'settings.admin.editFail': 'Güncelleme başarısız.',
 
   // Settings Page
   'settings.title': 'Ayarlar',
@@ -818,6 +827,15 @@ const en = {
   'settings.admin.role.super_administrator': 'Super Administrator',
   'settings.admin.role.admin': 'Admin',
   'settings.admin.role.read_only': 'Read Only',
+  'settings.admin.colMfa': 'MFA',
+  'settings.admin.mfaActive': 'Active',
+  'settings.admin.mfaInactive': 'Inactive',
+  'settings.admin.resetMfa': 'Reset MFA',
+  'settings.admin.mfaResetOk': 'MFA reset. User will be asked to set it up again on next login.',
+  'settings.admin.mfaResetFail': 'Failed to reset MFA.',
+  'settings.admin.editUser': 'Edit',
+  'settings.admin.editOk': 'User updated successfully.',
+  'settings.admin.editFail': 'Update failed.',
 
   // Settings Page
   'settings.title': 'Settings',

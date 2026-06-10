@@ -40,6 +40,7 @@ export const authApi = {
   mfaVerify: (temp_token, code) => api.post('/auth/mfa/verify', { temp_token, code }),
   mfaReset: (current_password) => api.post('/auth/mfa/reset', { current_password }),
   mfaStatus: () => api.get('/auth/mfa/status'),
+  mfaResetUser: (id) => api.delete(`/auth/users/${id}/mfa`),
 }
 
 export const devicesApi = {

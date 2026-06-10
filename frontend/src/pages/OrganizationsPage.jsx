@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { organizationsApi } from '../services/api'
 import { useLanguage } from '../i18n'
 import useAuthStore from '../store/authStore'
@@ -43,7 +44,7 @@ export default function OrganizationsPage() {
     setOrgError('')
     try {
       await organizationsApi.create({ name: orgName.trim(), description: orgDesc.trim() || null })
-      setOrgName(''); setOrgDesc(''); setShowOrgForm(false)
+      setOrgName(''); setOrgDesc(''); setOrgError(''); setShowOrgForm(false)
       load()
     } catch (err) {
       setOrgError(err?.response?.data?.detail || t('orgs.saveFailed'))
@@ -120,20 +121,33 @@ export default function OrganizationsPage() {
         )}
       </div>
 
-      {/* New org form */}
-      {showOrgForm && (
-        <div className="bg-white border border-blue-200 rounded-xl p-5 mb-6 shadow-card">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+      {/* New org modal */}
+      {showOrgForm && createPortal(
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowOrgForm(false); setOrgName(''); setOrgDesc(''); setOrgError('') } }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-[440px]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-base font-semibold text-slate-800">{t('orgs.newLocation')}</h2>
+              </div>
+              <button
+                onClick={() => { setShowOrgForm(false); setOrgName(''); setOrgDesc(''); setOrgError('') }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <h2 className="text-sm font-semibold text-slate-700">{t('orgs.newLocation')}</h2>
-          </div>
-          <form onSubmit={handleCreateOrg} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateOrg} className="px-6 py-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   {t('orgs.nameLabel')} <span className="text-red-500">*</span>
@@ -152,20 +166,22 @@ export default function OrganizationsPage() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-            </div>
-            {orgError && <p className="text-xs text-red-600">{orgError}</p>}
-            <div className="flex gap-2 pt-1">
-              <button type="submit" disabled={savingOrg}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                {savingOrg ? t('common.saving') : t('common.save')}
-              </button>
-              <button type="button" onClick={() => setShowOrgForm(false)}
-                className="border border-slate-300 text-slate-600 px-4 py-2 rounded-lg text-sm hover:bg-slate-50 transition-colors">
-                {t('common.cancel')}
-              </button>
-            </div>
-          </form>
-        </div>
+              {orgError && <p className="text-xs text-red-600">{orgError}</p>}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button type="button"
+                  onClick={() => { setShowOrgForm(false); setOrgName(''); setOrgDesc(''); setOrgError('') }}
+                  className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2 transition-colors">
+                  {t('common.cancel')}
+                </button>
+                <button type="submit" disabled={savingOrg}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                  {savingOrg ? t('common.saving') : t('common.save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Content */}

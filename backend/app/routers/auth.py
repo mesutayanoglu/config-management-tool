@@ -138,6 +138,24 @@ async def mfa_reset(
     return {"status": "ok"}
 
 
+@router.delete("/users/{user_id}/mfa", status_code=status.HTTP_200_OK)
+async def admin_reset_user_mfa(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_super_admin_user),
+):
+    """Super admin resets another user's MFA."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kullanıcı bulunamadı")
+
+    target.totp_secret = None
+    target.mfa_enabled = False
+    await db.commit()
+    return {"status": "ok"}
+
+
 @router.get("/mfa/status")
 async def mfa_status(current_user: User = Depends(get_current_user)):
     return {"mfa_enabled": current_user.mfa_enabled}

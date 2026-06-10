@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { settingsApi, authApi, credentialProfilesApi } from '../services/api'
 import { useLanguage } from '../i18n'
 import useAuthStore from '../store/authStore'
@@ -305,21 +306,13 @@ export default function SettingsPage() {
           description={t('credProfiles.sectionDesc')}
           action={
             <button
-              onClick={() => setShowProfileCreate(v => !v)}
-              className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${
-                showProfileCreate
-                  ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+              onClick={() => setShowProfileCreate(true)}
+              className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
             >
-              {showProfileCreate ? t('common.cancel') : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  {t('credProfiles.addNew')}
-                </>
-              )}
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              {t('credProfiles.addNew')}
             </button>
           }
         >
@@ -344,21 +337,13 @@ export default function SettingsPage() {
           description="Kullanıcı hesapları ve erişim rol yönetimi"
           action={isSuperAdmin() && (
             <button
-              onClick={() => setShowAdminCreate((v) => !v)}
-              className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${
-                showAdminCreate
-                  ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+              onClick={() => setShowAdminCreate(true)}
+              className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
             >
-              {showAdminCreate ? t('common.cancel') : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  {t('settings.admin.addUser')}
-                </>
-              )}
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              {t('settings.admin.addUser')}
             </button>
           )}
         >
@@ -679,6 +664,20 @@ function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCrea
   const [changingPwd, setChangingPwd] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [resettingMfaId, setResettingMfaId] = useState(null)
+  const [openMenuId, setOpenMenuId] = useState(null)
+  const [menuPos, setMenuPos] = useState(null)
+  const [editModal, setEditModal] = useState(null)   // { userId, username, email }
+  const [editForm, setEditForm] = useState({ username: '', email: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  useEffect(() => {
+    if (!openMenuId) return
+    function handleOutside(e) {
+      if (!e.target.closest('[data-kebab]')) { setOpenMenuId(null); setMenuPos(null) }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [openMenuId])
 
   async function loadUsers() {
     try {
@@ -701,6 +700,7 @@ function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCrea
       setToast({ message: t('settings.admin.createOk'), type: 'success' })
       setCreateForm({ username: '', password: '', email: '', role: 'admin' })
       setShowCreate(false)
+
       loadUsers()
     } catch (err) {
       const detail = err.response?.data?.detail || t('settings.admin.createFail')
@@ -737,6 +737,22 @@ function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCrea
     }
   }
 
+  async function handleEditSave(e) {
+    e.preventDefault()
+    setSavingEdit(true)
+    try {
+      await authApi.updateProfile(editModal.userId, { username: editForm.username, email: editForm.email || null })
+      setToast({ message: t('settings.admin.editOk'), type: 'success' })
+      setEditModal(null)
+      loadUsers()
+    } catch (err) {
+      const detail = err.response?.data?.detail || t('settings.admin.editFail')
+      setToast({ message: detail, type: 'error' })
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   async function handleDelete(userId) {
     try {
       await authApi.deleteUser(userId)
@@ -750,6 +766,7 @@ function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCrea
   }
 
   async function handleMfaReset(userId) {
+    setOpenMenuId(null); setMenuPos(null)
     setResettingMfaId(userId)
     try {
       await authApi.mfaResetUser(userId)
@@ -763,77 +780,108 @@ function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCrea
     }
   }
 
+  function openEdit(u) {
+    setOpenMenuId(null); setMenuPos(null)
+    setEditForm({ username: u.username, email: u.email || '' })
+    setEditModal({ userId: u.id, username: u.username })
+  }
+
+  function openPassword(u) {
+    setOpenMenuId(null); setMenuPos(null)
+    setPasswordModal({ userId: u.id, username: u.username })
+    setNewPassword('')
+  }
+
   return (
     <div>
 
-      {/* Create Form */}
-      {canManage && showCreate && (
-        <div className="px-6 py-5 border-b border-gray-200 bg-gray-50">
-          <p className="text-sm font-semibold text-gray-700 mb-4">{t('settings.admin.newUser')}</p>
-          <form onSubmit={handleCreate} className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t('settings.admin.username')}</label>
-              <input
-                type="text"
-                value={createForm.username}
-                onChange={(e) => setCreateForm((p) => ({ ...p, username: e.target.value }))}
-                required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t('settings.admin.password')}</label>
-              <input
-                type="password"
-                value={createForm.password}
-                onChange={(e) => setCreateForm((p) => ({ ...p, password: e.target.value }))}
-                required
-                minLength={6}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {t('settings.admin.email')}{' '}
-                <span className="text-gray-400 font-normal">({t('common.optional')})</span>
-              </label>
-              <input
-                type="email"
-                value={createForm.email}
-                onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{t('settings.admin.role')}</label>
-              <select
-                value={createForm.role}
-                onChange={(e) => setCreateForm((p) => ({ ...p, role: e.target.value }))}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{t(`settings.admin.role.${r}`)}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2 flex items-center justify-end gap-2 pt-1">
+      {/* Create User Modal */}
+      {canManage && showCreate && createPortal(
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowCreate(false); setCreateForm({ username: '', password: '', email: '', role: 'admin' }) } }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-[480px]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-800">{t('settings.admin.newUser')}</h2>
               <button
-                type="button"
-                onClick={() => setShowCreate(false)}
-                className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2"
+                onClick={() => { setShowCreate(false); setCreateForm({ username: '', password: '', email: '', role: 'admin' }) }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
               >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={creating}
-                className="text-sm bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
-              >
-                {creating ? t('common.saving') : t('settings.admin.createBtn')}
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-          </form>
-        </div>
+            <form onSubmit={handleCreate} className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('settings.admin.username')}</label>
+                  <input
+                    type="text"
+                    value={createForm.username}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, username: e.target.value }))}
+                    required
+                    autoFocus
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('settings.admin.password')}</label>
+                  <input
+                    type="password"
+                    value={createForm.password}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, password: e.target.value }))}
+                    required
+                    minLength={6}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {t('settings.admin.email')}{' '}
+                    <span className="text-gray-400 font-normal">({t('common.optional')})</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={createForm.email}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('settings.admin.role')}</label>
+                  <select
+                    value={createForm.role}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, role: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>{t(`settings.admin.role.${r}`)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setShowCreate(false); setCreateForm({ username: '', password: '', email: '', role: 'admin' }) }}
+                  className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2 transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="text-sm bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
+                >
+                  {creating ? t('common.saving') : t('settings.admin.createBtn')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* User Table */}
@@ -849,12 +897,15 @@ function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCrea
                 {t('settings.admin.colUsername')}
               </th>
               <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                {t('settings.admin.colRole')}
-              </th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 {t('settings.admin.colEmail')}
               </th>
-              <th className="px-6 py-3 w-36"></th>
+              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                {t('settings.admin.colMfa')}
+              </th>
+              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                {t('settings.admin.colRole')}
+              </th>
+              <th className="px-4 py-3 w-12"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -875,42 +926,105 @@ function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCrea
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-3.5">
-                  {canManage ? (
-                    <select
-                      value={u.role}
-                      onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                      className="text-xs text-gray-700 px-2.5 py-1 rounded-md border border-gray-200 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>{t(`settings.admin.role.${r}`)}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="text-xs text-gray-700 px-2.5 py-1 rounded-md border border-gray-200 bg-white">
-                      {t(`settings.admin.role.${u.role}`)}
-                    </span>
-                  )}
-                </td>
                 <td className="px-6 py-3.5 text-gray-500 text-xs">
                   {u.email || <span className="text-gray-300">—</span>}
                 </td>
                 <td className="px-6 py-3.5">
+                  {u.mfa_enabled ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0"></span>
+                      {t('settings.admin.mfaActive')}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0"></span>
+                      {t('settings.admin.mfaInactive')}
+                    </span>
+                  )}
+                </td>
+                <td className="px-6 py-3.5 text-gray-500 text-xs">
+                  {t(`settings.admin.role.${u.role}`)}
+                </td>
+                <td className="px-4 py-3.5">
                   {canManage && (
-                    <div className="flex items-center gap-3 justify-end">
+                    <div className="flex justify-end" data-kebab>
                       <button
-                        onClick={() => { setPasswordModal({ userId: u.id, username: u.username }); setNewPassword('') }}
-                        className="text-xs text-gray-500 hover:text-blue-600 transition-colors font-medium whitespace-nowrap"
+                        data-kebab
+                        onClick={(e) => {
+                          if (openMenuId === u.id) { setOpenMenuId(null); setMenuPos(null) }
+                          else {
+                            const r = e.currentTarget.getBoundingClientRect()
+                            const isSelf = u.id === currentUser?.id
+                            const dropdownHeight = isSelf ? 148 : 192
+                            const spaceBelow = window.innerHeight - r.bottom
+                            const openUpward = spaceBelow < dropdownHeight + 8
+                            setMenuPos({
+                              top: openUpward ? Math.max(8, r.top - dropdownHeight - 4) : r.bottom + 4,
+                              right: window.innerWidth - r.right,
+                            })
+                            setOpenMenuId(u.id)
+                          }
+                        }}
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                       >
-                        {t('settings.admin.changePassword')}
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+                        </svg>
                       </button>
-                      {u.id !== currentUser?.id && (
-                        <button
-                          onClick={() => setDeleteConfirm({ id: u.id, username: u.username })}
-                          className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium"
-                        >
-                          {t('common.delete')}
-                        </button>
+                      {openMenuId === u.id && menuPos && createPortal(
+                        <div data-kebab style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }} className="z-50 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1 text-sm">
+                          {/* Düzenle */}
+                          <button
+                            data-kebab
+                            onClick={() => openEdit(u)}
+                            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            {t('settings.admin.editUser')}
+                          </button>
+                          {/* Şifre Değiştir */}
+                          <button
+                            data-kebab
+                            onClick={() => openPassword(u)}
+                            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                            </svg>
+                            {t('settings.admin.changePassword')}
+                          </button>
+                          {/* MFA Sıfırla */}
+                          <button
+                            data-kebab
+                            onClick={() => u.mfa_enabled && handleMfaReset(u.id)}
+                            disabled={!u.mfa_enabled || resettingMfaId === u.id}
+                            className={`w-full flex items-center gap-2.5 px-3.5 py-2 transition-colors ${u.mfa_enabled ? 'text-amber-600 hover:bg-amber-50' : 'text-gray-300 cursor-not-allowed'}`}
+                          >
+                            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                            {resettingMfaId === u.id ? t('common.saving') : t('settings.admin.resetMfa')}
+                          </button>
+                          {/* Ayraç + Sil */}
+                          {u.id !== currentUser?.id && (
+                            <>
+                              <div className="my-1 border-t border-gray-100" />
+                              <button
+                                data-kebab
+                                onClick={() => { setOpenMenuId(null); setMenuPos(null); setDeleteConfirm({ id: u.id, username: u.username }) }}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                {t('common.delete')}
+                              </button>
+                            </>
+                          )}
+                        </div>,
+                        document.body
                       )}
                     </div>
                   )}
@@ -919,6 +1033,58 @@ function AdministratorsSection({ setToast, t, canManage, showCreate, setShowCrea
             ))}
           </tbody>
         </table>
+      )}
+
+      {/* Edit Modal */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-96 border border-gray-200">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">{t('settings.admin.editUser')}</h3>
+                <p className="text-xs text-gray-400">{editModal.username}</p>
+              </div>
+            </div>
+            <form onSubmit={handleEditSave} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t('settings.admin.username')}</label>
+                <input
+                  type="text"
+                  value={editForm.username}
+                  onChange={(e) => setEditForm(p => ({ ...p, username: e.target.value }))}
+                  required
+                  autoFocus
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {t('settings.admin.email')}
+                  <span className="text-gray-400 font-normal ml-1">({t('common.optional')})</span>
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm(p => ({ ...p, email: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-1">
+                <button type="button" onClick={() => setEditModal(null)} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2">
+                  {t('common.cancel')}
+                </button>
+                <button type="submit" disabled={savingEdit} className="text-sm bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium">
+                  {savingEdit ? t('common.saving') : t('common.save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Password Modal */}
@@ -1169,132 +1335,149 @@ function CredentialProfilesSection({ setToast, t, showCreate, setShowCreate }) {
 
   return (
     <div>
-      {/* ── Form (create / edit) — sadece açıkken göster ── */}
-      {showForm && (
-        <div className="border-b border-gray-200">
+      {/* ── Profile Form Modal (create / edit) ── */}
+      {showForm && createPortal(
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+          onClick={(e) => { if (e.target === e.currentTarget) resetForm() }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-[560px] max-h-[90vh] flex flex-col">
 
-          {/* Form sub-header: başlık + SSH/Telnet sekmeleri */}
-          <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-b border-gray-100">
-            <span className="text-sm font-semibold text-gray-800">
-              {editingId ? t('credProfiles.editHint') : t('credProfiles.addNew')}
-            </span>
-            <div className="flex items-center gap-3">
-              <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm font-medium">
-                <button type="button" onClick={() => setConnType('ssh')}
-                  className={`px-4 py-1.5 transition-colors ${isSsh ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-                  SSH
-                </button>
-                <button type="button" onClick={() => setConnType('telnet')}
-                  className={`px-4 py-1.5 border-l border-gray-300 transition-colors ${!isSsh ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-                  Telnet
-                </button>
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <h2 className="text-base font-semibold text-gray-800">
+                  {editingId ? t('credProfiles.editHint') : t('credProfiles.addNew')}
+                </h2>
+                <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm font-medium">
+                  <button type="button" onClick={() => setConnType('ssh')}
+                    className={`px-3 py-1 transition-colors ${isSsh ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                    SSH
+                  </button>
+                  <button type="button" onClick={() => setConnType('telnet')}
+                    className={`px-3 py-1 border-l border-gray-300 transition-colors ${!isSsh ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                    Telnet
+                  </button>
+                </div>
               </div>
-              {editingId && (
-                <button onClick={() => setDeleteConfirm({ id: editingId, name: form.name })}
-                  className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium">
-                  {t('common.delete')}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Telnet uyarısı */}
-          {!isSsh && (
-            <div className="flex items-center gap-2 px-6 py-2.5 bg-amber-50 border-b border-amber-100">
-              <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <p className="text-xs text-amber-700">{t('credProfiles.telnetNote')}</p>
-            </div>
-          )}
-
-          {/* Form alanları */}
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>{t('credProfiles.profileName')} <span className="text-red-500">*</span></label>
-                <input type="text" required value={form.name}
-                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>{isSsh ? 'SSH Port' : 'Telnet Port'}</label>
-                <input type="number" min="1" max="65535" value={form.port}
-                  onChange={e => setForm(p => ({ ...p, port: e.target.value }))} className={inputCls} />
-              </div>
-            </div>
-
-            <div>
-              <label className={labelCls}>{t('credProfiles.description')}</label>
-              <input type="text" value={form.description}
-                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                placeholder={t('credProfiles.descPlaceholder')} className={inputCls} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>{t('credProfiles.username')} <span className="text-red-500">*</span></label>
-                <input type="text" required value={form.username}
-                  onChange={e => setForm(p => ({ ...p, username: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>
-                  {t('credProfiles.password')}
-                  {editingId
-                    ? <span className="text-gray-400 font-normal ml-1">({t('common.optional')})</span>
-                    : <span className="text-red-500"> *</span>}
-                </label>
-                <input type="password" required={!editingId} value={form.password}
-                  onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                  placeholder={editingId ? t('editModal.passwordPlaceholder') : ''} className={inputCls} />
-              </div>
-            </div>
-
-            <div>
-              <label className={labelCls}>
-                {t('credProfiles.enableSecret')}
-                <span className="text-gray-400 font-normal ml-1">({t('common.optional')})</span>
-              </label>
-              <input type="password" value={form.enable_secret}
-                onChange={e => setForm(p => ({ ...p, enable_secret: e.target.value }))}
-                placeholder={editingId ? t('editModal.passwordPlaceholder') : ''} className={inputCls} />
-              <p className="text-xs text-gray-400 mt-1">{t('credProfiles.enableSecretHint')}</p>
-            </div>
-
-            {/* SSH Algoritmaları — sadece SSH'ta */}
-            {isSsh && (
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <button type="button" onClick={() => setShowAlgos(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
-                  <span className="text-sm font-medium text-gray-700">{t('credProfiles.sshAlgos')}</span>
-                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${showAlgos ? 'rotate-180' : ''}`}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              <div className="flex items-center gap-3">
+                {editingId && (
+                  <button
+                    onClick={() => setDeleteConfirm({ id: editingId, name: form.name })}
+                    className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium"
+                  >
+                    {t('common.delete')}
+                  </button>
+                )}
+                <button onClick={resetForm} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-                {showAlgos && (
-                  <div className="p-4 space-y-4 border-t border-gray-100">
-                    <p className="text-xs text-gray-400">{t('credProfiles.algosHint')}</p>
-                    <AlgGroup label={t('credProfiles.kexAlgos')} algs={KEX_ALGS} selected={form.kex_algs} onToggle={name => toggleAlg('kex_algs', name)} />
-                    <AlgGroup label={t('credProfiles.hostKeyAlgos')} algs={HOST_KEY_ALGS} selected={form.host_key_algs} onToggle={name => toggleAlg('host_key_algs', name)} />
-                    <AlgGroup label={t('credProfiles.cipherAlgos')} algs={CIPHER_ALGS} selected={form.cipher_algs} onToggle={name => toggleAlg('cipher_algs', name)} />
-                  </div>
-                )}
+              </div>
+            </div>
+
+            {/* Telnet uyarısı */}
+            {!isSsh && (
+              <div className="flex items-center gap-2 px-6 py-2.5 bg-amber-50 border-b border-amber-100 flex-shrink-0">
+                <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p className="text-xs text-amber-700">{t('credProfiles.telnetNote')}</p>
               </div>
             )}
 
-            {/* Butonlar — sağ hizalı */}
-            <div className="flex items-center justify-end gap-3 pt-1">
-              <button type="button" onClick={resetForm}
-                className="border border-gray-300 text-gray-600 px-5 py-2 rounded-md text-sm hover:bg-gray-50 transition-colors">
-                {t('common.cancel')}
-              </button>
-              <button type="submit" disabled={saving}
-                className="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                {saving ? t('common.saving') : t('common.save')}
-              </button>
+            {/* Scrollable form body */}
+            <div className="overflow-y-auto flex-1">
+              <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>{t('credProfiles.profileName')} <span className="text-red-500">*</span></label>
+                    <input type="text" required autoFocus value={form.name}
+                      onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>{isSsh ? 'SSH Port' : 'Telnet Port'}</label>
+                    <input type="number" min="1" max="65535" value={form.port}
+                      onChange={e => setForm(p => ({ ...p, port: e.target.value }))} className={inputCls} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelCls}>{t('credProfiles.description')}</label>
+                  <input type="text" value={form.description}
+                    onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                    placeholder={t('credProfiles.descPlaceholder')} className={inputCls} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>{t('credProfiles.username')} <span className="text-red-500">*</span></label>
+                    <input type="text" required value={form.username}
+                      onChange={e => setForm(p => ({ ...p, username: e.target.value }))} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>
+                      {t('credProfiles.password')}
+                      {editingId
+                        ? <span className="text-gray-400 font-normal ml-1">({t('common.optional')})</span>
+                        : <span className="text-red-500"> *</span>}
+                    </label>
+                    <input type="password" required={!editingId} value={form.password}
+                      onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                      placeholder={editingId ? t('editModal.passwordPlaceholder') : ''} className={inputCls} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelCls}>
+                    {t('credProfiles.enableSecret')}
+                    <span className="text-gray-400 font-normal ml-1">({t('common.optional')})</span>
+                  </label>
+                  <input type="password" value={form.enable_secret}
+                    onChange={e => setForm(p => ({ ...p, enable_secret: e.target.value }))}
+                    placeholder={editingId ? t('editModal.passwordPlaceholder') : ''} className={inputCls} />
+                  <p className="text-xs text-gray-400 mt-1">{t('credProfiles.enableSecretHint')}</p>
+                </div>
+
+                {/* SSH Algoritmaları — sadece SSH'ta */}
+                {isSsh && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <button type="button" onClick={() => setShowAlgos(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
+                      <span className="text-sm font-medium text-gray-700">{t('credProfiles.sshAlgos')}</span>
+                      <svg className={`w-4 h-4 text-gray-400 transition-transform ${showAlgos ? 'rotate-180' : ''}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showAlgos && (
+                      <div className="p-4 space-y-4 border-t border-gray-100">
+                        <p className="text-xs text-gray-400">{t('credProfiles.algosHint')}</p>
+                        <AlgGroup label={t('credProfiles.kexAlgos')} algs={KEX_ALGS} selected={form.kex_algs} onToggle={name => toggleAlg('kex_algs', name)} />
+                        <AlgGroup label={t('credProfiles.hostKeyAlgos')} algs={HOST_KEY_ALGS} selected={form.host_key_algs} onToggle={name => toggleAlg('host_key_algs', name)} />
+                        <AlgGroup label={t('credProfiles.cipherAlgos')} algs={CIPHER_ALGS} selected={form.cipher_algs} onToggle={name => toggleAlg('cipher_algs', name)} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Butonlar */}
+                <div className="flex items-center justify-end gap-3 pt-1">
+                  <button type="button" onClick={resetForm}
+                    className="border border-gray-300 text-gray-600 px-5 py-2 rounded-md text-sm hover:bg-gray-50 transition-colors">
+                    {t('common.cancel')}
+                  </button>
+                  <button type="submit" disabled={saving}
+                    className="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                    {saving ? t('common.saving') : t('common.save')}
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
-        </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Kayıtlı Profiller listesi ── */}

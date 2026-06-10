@@ -6,6 +6,7 @@ import SchedulerForm from '../components/Schedulers/SchedulerForm'
 import SchedulerEditModal from '../components/Schedulers/SchedulerEditModal'
 import ConfirmModal from '../components/ConfirmModal'
 import Toast from '../components/Toast'
+import { createPortal } from 'react-dom'
 
 function useScheduleLabel(t) {
   return function describeSchedule(s) {
@@ -46,6 +47,13 @@ export default function SchedulersPage() {
   const [schedulers, setSchedulers] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [editingScheduler, setEditingScheduler] = useState(null)
+
+  useEffect(() => {
+    if (!showForm) return
+    function onKey(e) { if (e.key === 'Escape') setShowForm(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showForm])
   const [confirm, setConfirm] = useState(null)
   const [toast, setToast] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -120,15 +128,28 @@ export default function SchedulersPage() {
         )}
       </div>
 
-      {/* Inline create form */}
-      {showForm && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-          <h2 className="text-base font-semibold text-gray-700 mb-5">{t('schedulers.newTitle')}</h2>
-          <SchedulerForm
-            onSubmit={handleCreate}
-            onCancel={() => setShowForm(false)}
-          />
-        </div>
+      {/* Create modal */}
+      {showForm && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowForm(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <h2 className="text-base font-semibold text-gray-900">{t('schedulers.newTitle')}</h2>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto px-6 py-5">
+              <SchedulerForm
+                onSubmit={handleCreate}
+                onCancel={() => setShowForm(false)}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Table */}
