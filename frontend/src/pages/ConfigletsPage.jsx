@@ -4,6 +4,7 @@ import { useLanguage } from '../i18n'
 import useAuthStore from '../store/authStore'
 import ConfigletModal from '../components/Configlets/ConfigletModal'
 import ConfigletExecuteModal from '../components/Configlets/ConfigletExecuteModal'
+import ConfigletHistoryModal from '../components/Configlets/ConfigletHistoryModal'
 import ConfirmModal from '../components/ConfirmModal'
 import Toast from '../components/Toast'
 
@@ -52,6 +53,7 @@ export default function ConfigletsPage() {
   const [executingConfiglet, setExecutingConfiglet] = useState(null)
   const [confirm, setConfirm] = useState(null)
   const [toast, setToast] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   async function load() {
     try {
@@ -103,17 +105,28 @@ export default function ConfigletsPage() {
           <h1 className="text-xl font-bold text-gray-900">{t('configlets.title')}</h1>
           <p className="text-sm text-gray-500 mt-0.5">{t('configlets.subtitle')}</p>
         </div>
-        {!isReadOnly() && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors"
+            onClick={() => setShowHistory(true)}
+            className="inline-flex items-center gap-1.5 bg-white text-gray-700 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-50 shadow-sm transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {t('configlets.addButton')}
+            {t('configlets.history.button')}
           </button>
-        )}
+          {!isReadOnly() && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              {t('configlets.addButton')}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -255,6 +268,10 @@ export default function ConfigletsPage() {
           configlet={executingConfiglet}
           onClose={() => setExecutingConfiglet(null)}
         />
+      )}
+
+      {showHistory && (
+        <ConfigletHistoryModal onClose={() => setShowHistory(false)} />
       )}
 
       {confirm && (

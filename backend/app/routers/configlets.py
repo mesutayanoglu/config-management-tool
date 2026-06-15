@@ -7,14 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.security import get_current_user, get_write_user
-from app.models.configlet import Configlet, ConfigletDevice
+from app.models.configlet import Configlet, ConfigletDevice, ConfigletExecution
 from app.models.device import Device
 from app.models.user import User
 from app.schemas.configlet import (
     ConfigletCreate,
     ConfigletExecuteRequest,
+    ConfigletExecutionOut,
     ConfigletOut,
     ConfigletUpdate,
     DeviceBrief,
@@ -75,6 +76,28 @@ def _to_out(c: Configlet) -> ConfigletOut:
     )
 
 
+def _to_exec_out(e: ConfigletExecution) -> ConfigletExecutionOut:
+    device_results = None
+    if e.device_results:
+        try:
+            device_results = json.loads(e.device_results)
+        except Exception:
+            pass
+    return ConfigletExecutionOut(
+        id=e.id,
+        configlet_id=e.configlet_id,
+        configlet_name=e.configlet_name,
+        triggered_by_id=e.triggered_by_id,
+        triggered_by_username=e.triggered_by_username,
+        trigger_type=e.trigger_type,
+        started_at=e.started_at,
+        total_devices=e.total_devices,
+        ok_count=e.ok_count,
+        fail_count=e.fail_count,
+        device_results=device_results,
+    )
+
+
 async def _load(configlet_id: int, db: AsyncSession) -> Configlet:
     result = await db.execute(
         select(Configlet)
@@ -102,6 +125,19 @@ async def list_configlets(
         .order_by(Configlet.name)
     )
     return [_to_out(c) for c in result.scalars().all()]
+
+
+# IMPORTANT: This route must be defined BEFORE /{configlet_id} to avoid
+# FastAPI trying to parse "executions" as an integer.
+@router.get("/executions", response_model=list[ConfigletExecutionOut])
+async def list_all_executions(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(ConfigletExecution).order_by(ConfigletExecution.started_at.desc()).limit(500)
+    )
+    return [_to_exec_out(e) for e in result.scalars().all()]
 
 
 @router.post("/", response_model=ConfigletOut, status_code=status.HTTP_201_CREATED)
@@ -221,7 +257,7 @@ async def execute_configlet_stream(
     configlet_id: int,
     body: ConfigletExecuteRequest,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_write_user),
+    current_user: User = Depends(get_write_user),
 ):
     c = await _load(configlet_id, db)
 
@@ -240,17 +276,20 @@ async def execute_configlet_stream(
     if not devices:
         raise HTTPException(status_code=400, detail="Seçilen cihazlar bulunamadı")
 
-    # Snapshot data needed — DB session closes after this coroutine returns,
-    # so the generator must not use `db`.
+    # Snapshot all data before DB session closes
     device_list = list(devices)
     rendered_content = rendered
     notification_email = c.notification_email
     configlet_name = c.name
+    configlet_id_snap = c.id
+    user_id_snap = current_user.id
+    username_snap = current_user.username
 
     async def generate():
         from datetime import datetime
         from zoneinfo import ZoneInfo
 
+        started_at = datetime.now(ZoneInfo("Europe/Istanbul")).replace(tzinfo=None)
         total = len(device_list)
         ok_count = 0
         fail_count = 0
@@ -268,6 +307,26 @@ async def execute_configlet_stream(
 
         yield f"data: {json.dumps({'type': 'complete', 'total': total, 'ok': ok_count, 'failed': fail_count}, ensure_ascii=False)}\n\n"
 
+        # Save execution record with a fresh DB session
+        try:
+            async with AsyncSessionLocal() as save_db:
+                execution = ConfigletExecution(
+                    configlet_id=configlet_id_snap,
+                    configlet_name=configlet_name,
+                    triggered_by_id=user_id_snap,
+                    triggered_by_username=username_snap,
+                    trigger_type="manual",
+                    started_at=started_at,
+                    total_devices=total,
+                    ok_count=ok_count,
+                    fail_count=fail_count,
+                    device_results=json.dumps(exec_results, ensure_ascii=False),
+                )
+                save_db.add(execution)
+                await save_db.commit()
+        except Exception:
+            pass  # History save failure must not affect the response
+
         if notification_email:
             run_at = datetime.now(ZoneInfo("Europe/Istanbul")).strftime("%d.%m.%Y %H:%M")
             await send_configlet_notification(notification_email, configlet_name, run_at, exec_results)
@@ -277,6 +336,6 @@ async def execute_configlet_stream(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # prevent Nginx buffering
+            "X-Accel-Buffering": "no",
         },
     )

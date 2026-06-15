@@ -3,6 +3,22 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
+class ConfigletExecution(Base):
+    __tablename__ = "configlet_executions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    configlet_id = Column(Integer, ForeignKey("configlets.id", ondelete="SET NULL"), nullable=True)
+    configlet_name = Column(String, nullable=False)
+    triggered_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    triggered_by_username = Column(String, nullable=True)
+    trigger_type = Column(String(16), nullable=False)  # 'manual' | 'auto'
+    started_at = Column(DateTime, nullable=False)       # Istanbul naive
+    total_devices = Column(Integer, nullable=False, default=0)
+    ok_count = Column(Integer, nullable=False, default=0)
+    fail_count = Column(Integer, nullable=False, default=0)
+    device_results = Column(Text, nullable=True)        # JSON array
+
+
 class Configlet(Base):
     __tablename__ = "configlets"
 

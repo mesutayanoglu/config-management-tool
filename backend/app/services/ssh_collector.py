@@ -109,6 +109,11 @@ def _ssh_collect_sync(
             _kex_lock.release()
             need_lock = False
 
+        # Cisco: enable_secret verilmese bile user exec modunda kalınırsa
+        # privileged exec moduna geç (şifresiz enable için de gerekli)
+        if device_type.startswith("cisco") and not conn.check_enable_mode():
+            conn.enable()
+
         output = conn.send_command(command, read_timeout=60)
         conn.disconnect()
         return output
@@ -187,6 +192,15 @@ async def collect_config(device) -> dict:
             f"SSH bağlantısı kuruldu ancak komut çıktısı boş geldi. "
             f"Cihaz tipi '{device_type}' doğru mu? "
             f"Komut: '{device.config_command}'"
+        )
+
+    # Cisco hata çıktısını yakala: kısa çıktı + "% " hata satırı içeriyorsa kaydetme
+    stripped = output.strip()
+    stripped_lines = [l for l in stripped.splitlines() if l.strip()]
+    if len(stripped_lines) <= 3 and any(l.lstrip().startswith("% ") for l in stripped_lines):
+        raise RuntimeError(
+            f"Cihaz hata yanıtı döndürdü (yetersiz yetki veya geçersiz komut): "
+            f"{stripped[:300]}"
         )
 
     old_content = await github.get_config(device.device_uid)

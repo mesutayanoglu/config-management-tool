@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from pydantic import BaseModel
 
 
@@ -81,3 +82,19 @@ class DeviceExecuteResult(BaseModel):
 class ConfigletExecuteRequest(BaseModel):
     device_ids: list[int]
     variables: dict[str, str] = {}
+
+
+class ConfigletExecutionOut(BaseModel):
+    id: int
+    configlet_id: int | None
+    configlet_name: str
+    triggered_by_id: int | None
+    triggered_by_username: str | None
+    trigger_type: str
+    started_at: datetime
+    total_devices: int
+    ok_count: int
+    fail_count: int
+    device_results: list[Any] | None
+
+    model_config = {"from_attributes": True}

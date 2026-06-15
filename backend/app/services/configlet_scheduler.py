@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import AsyncSessionLocal
-from app.models.configlet import Configlet, ConfigletDevice
+from app.models.configlet import Configlet, ConfigletDevice, ConfigletExecution
 from app.models.device import Device
 from app.services.configlet_service import execute_on_device, render_template
 from app.services.job_scheduler import _apscheduler
@@ -102,9 +102,29 @@ async def _run_configlet_job(configlet_id: int):
                     c.name, result_data["status"], device.hostname, result_data["duration_ms"]
                 )
 
-            c.last_run_at = datetime.now(ZoneInfo("Europe/Istanbul")).replace(tzinfo=None)
+            now_istanbul = datetime.now(ZoneInfo("Europe/Istanbul")).replace(tzinfo=None)
+            c.last_run_at = now_istanbul
             notification_email = c.notification_email
             configlet_name = c.name
+            configlet_id_snap = c.id
+            total = len(exec_results)
+            ok_count = sum(1 for r in exec_results if r.get("status") == "success")
+            fail_count = total - ok_count
+            await db.commit()
+
+            execution = ConfigletExecution(
+                configlet_id=configlet_id_snap,
+                configlet_name=configlet_name,
+                triggered_by_id=None,
+                triggered_by_username=None,
+                trigger_type="auto",
+                started_at=now_istanbul,
+                total_devices=total,
+                ok_count=ok_count,
+                fail_count=fail_count,
+                device_results=json.dumps(exec_results, ensure_ascii=False),
+            )
+            db.add(execution)
             await db.commit()
 
         if notification_email:

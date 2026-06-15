@@ -180,6 +180,19 @@ export default function ConfigletExecuteModal({ configlet, onClose }) {
 
   const termLines = buildLines(events)
 
+  function handleDownload() {
+    const text = termLines.map((l) => l.text || '').join('\n')
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const safeName = (configlet.name || 'output').replace(/[^a-zA-Z0-9_-]/g, '_')
+    const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-')
+    a.href = url
+    a.download = `${safeName}_${timestamp}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 flex flex-col" style={{ maxHeight: '92vh' }}>
@@ -329,6 +342,17 @@ export default function ConfigletExecuteModal({ configlet, onClose }) {
             )}
           </div>
           <div className="flex gap-3">
+            {phase === 'done' && (
+              <button
+                onClick={handleDownload}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {t('configlets.execute.download')}
+              </button>
+            )}
             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
               {t('common.close')}
             </button>

@@ -91,6 +91,7 @@ export const configletsApi = {
   update: (id, data) => api.patch(`/configlets/${id}`, data),
   remove: (id) => api.delete(`/configlets/${id}`),
   execute: (id, data) => api.post(`/configlets/${id}/execute`, data),
+  listExecutions: () => api.get('/configlets/executions'),
 }
 
 export const settingsApi = {

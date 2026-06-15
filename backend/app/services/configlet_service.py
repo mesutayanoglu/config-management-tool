@@ -88,6 +88,11 @@ def _execute_configlet_sync(
             _kex_lock.release()
             need_lock = False
 
+        # Cisco: enable_secret verilmese bile user exec modunda kalınırsa
+        # privileged exec moduna geç (send_config_set config modunu gerektirir)
+        if device_type.startswith("cisco") and not conn.check_enable_mode():
+            conn.enable()
+
         if _log_queue is not None:
             _log_queue.put({"type": "sending", "count": len(commands)})
 
