@@ -147,6 +147,8 @@ export default function DevicesPage() {
           const detail = err?.response?.data?.detail
           if (detail === 'scheduler_conflict') {
             showToast(t('devices.toast.deleteSchedulerError'), 'error')
+          } else if (detail === 'configlet_conflict') {
+            showToast(t('devices.toast.deleteConfigletError'), 'error')
           } else {
             showToast(detail || t('devices.toast.configFail'), 'error')
           }

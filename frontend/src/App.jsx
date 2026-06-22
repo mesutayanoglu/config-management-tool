@@ -10,6 +10,7 @@ import SchedulersPage from './pages/SchedulersPage'
 import OrganizationsPage from './pages/OrganizationsPage'
 import SettingsPage from './pages/SettingsPage'
 import ConfigletsPage from './pages/ConfigletsPage'
+import TopologyPage from './pages/TopologyPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import Sidebar from './components/Layout/Sidebar'
@@ -106,6 +107,16 @@ export default function App() {
             <PrivateRoute>
               <AppLayout>
                 <ConfigletsPage />
+              </AppLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/topology"
+          element={
+            <PrivateRoute>
+              <AppLayout>
+                <TopologyPage />
               </AppLayout>
             </PrivateRoute>
           }

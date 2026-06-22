@@ -192,3 +192,81 @@ async def start():
 def stop():
     if _apscheduler.running:
         _apscheduler.shutdown(wait=False)
+
+
+_TOPOLOGY_JOB_ID = "topology_autodiscover"
+
+
+async def _run_topology_discovery():
+    from app.models.topology import TopologyNeighbor
+    from app.services.lldp_collector import discover_neighbors
+    from sqlalchemy import delete
+
+    logger.warning("[Topology] Auto-discovery job fired")
+    try:
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy.orm import selectinload
+            result = await db.execute(
+                select(Device).options(selectinload(Device.credential_profile))
+            )
+            devices = result.scalars().all()
+
+            for device in devices:
+                try:
+                    neighbors = await discover_neighbors(device)
+                    await db.execute(
+                        delete(TopologyNeighbor).where(TopologyNeighbor.device_id == device.id)
+                    )
+                    await db.flush()
+
+                    from datetime import datetime
+                    now = datetime.utcnow()
+                    for n in neighbors:
+                        neighbor_ip = n.get("neighbor_ip")
+                        discovered_device_id = None
+                        if neighbor_ip:
+                            from sqlalchemy import select as sa_select
+                            res = await db.execute(
+                                sa_select(Device.id).where(Device.ip_address == neighbor_ip)
+                            )
+                            row = res.scalar_one_or_none()
+                            if row is not None:
+                                discovered_device_id = row
+
+                        db.add(TopologyNeighbor(
+                            device_id=device.id,
+                            neighbor_hostname=n.get("neighbor_hostname"),
+                            neighbor_ip=neighbor_ip,
+                            local_port=n.get("local_port"),
+                            neighbor_port=n.get("neighbor_port"),
+                            protocol=n.get("protocol", "lldp"),
+                            discovered_device_id=discovered_device_id,
+                            last_discovered_at=now,
+                        ))
+
+                    await db.commit()
+                    logger.warning("[Topology] OK — %s", device.hostname)
+                except Exception as exc:
+                    await db.rollback()
+                    logger.warning("[Topology] FAIL — %s: %s", device.hostname, exc)
+    except Exception as exc:
+        logger.warning("[Topology] Unexpected error: %s", exc)
+
+
+def schedule_topology_discovery(interval_hours: int):
+    if _apscheduler.get_job(_TOPOLOGY_JOB_ID):
+        _apscheduler.remove_job(_TOPOLOGY_JOB_ID)
+    _apscheduler.add_job(
+        _run_topology_discovery,
+        trigger=IntervalTrigger(hours=max(1, interval_hours)),
+        id=_TOPOLOGY_JOB_ID,
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+    logger.warning("[Topology] Auto-discovery scheduled every %dh", interval_hours)
+
+
+def unschedule_topology_discovery():
+    if _apscheduler.get_job(_TOPOLOGY_JOB_ID):
+        _apscheduler.remove_job(_TOPOLOGY_JOB_ID)
+        logger.warning("[Topology] Auto-discovery unscheduled")

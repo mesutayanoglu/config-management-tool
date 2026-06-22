@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     CHANGE_NOTIFY_ENABLED: bool = False
     CHANGE_NOTIFY_EMAILS: str = ""
 
+    # Topoloji otomatik keşif
+    TOPOLOGY_AUTO_ENABLED: bool = False
+    TOPOLOGY_INTERVAL_HOURS: int = 6
+
     # Uygulama ortamı — 'development' modda SMTP olmadan token log'a yazılır
     ENVIRONMENT: str = "production"
     FRONTEND_URL: str = "http://localhost"

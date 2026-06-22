@@ -53,6 +53,11 @@ const NAV_ITEMS = [
     path2: 'M15 11a3 3 0 11-6 0 3 3 0 016 0z',
   },
   {
+    to: '/topology',
+    key: 'nav.topology',
+    path1: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18',
+  },
+  {
     to: '/settings',
     key: 'nav.settings',
     path1:

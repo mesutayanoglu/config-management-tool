@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../i18n'
-import { devicesApi, schedulersApi } from '../services/api'
+import { devicesApi, schedulersApi, configletsApi } from '../services/api'
 
 function relativeTime(dateStr, lang) {
   if (!dateStr) return null
@@ -93,16 +93,16 @@ function SchedulerRunsTable({ schedulers, loading, t, lang }) {
         {sorted.map((s) => (
           <tr key={s.id} className="hover:bg-slate-50 transition-colors">
             <td className="py-3 pr-4">
-              <p className="font-medium text-slate-700">{s.name}</p>
+              <p className="font-medium text-slate-700 truncate max-w-[140px]">{s.name}</p>
             </td>
             <td className="py-3 pr-4">
               {s.last_run_at ? (
-                <span className="text-slate-600">
+                <span className="text-slate-600 text-xs">
                   {fullDateTime(s.last_run_at, lang)}
                   <span className="text-slate-400 ml-1">({relativeTime(s.last_run_at, lang)})</span>
                 </span>
               ) : (
-                <span className="text-slate-400 italic">{t('dashboard.neverRun')}</span>
+                <span className="text-slate-400 italic text-xs">{t('dashboard.neverRun')}</span>
               )}
             </td>
             <td className="py-3 text-right">
@@ -125,45 +125,72 @@ function SchedulerRunsTable({ schedulers, loading, t, lang }) {
   )
 }
 
-// ── Offline Devices Panel ──────────────────────────────────────────────────────
+// ── Configlet Runs Table ───────────────────────────────────────────────────────
 
-function OfflinePanel({ offlineDevices, loading, t }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-card p-5 flex flex-col h-full">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-        {t('dashboard.offlineDevices')}
-      </p>
-      {loading ? (
-        <div className="flex items-center gap-2 text-slate-400 py-4">
-          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-          <span className="text-sm">{t('common.loading')}</span>
-        </div>
-      ) : offlineDevices.length === 0 ? (
-        <div className="flex flex-col items-center justify-center flex-1 py-4 text-center">
-          <div className="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center mb-2">
-            <svg className="w-4.5 h-[18px] w-[18px] text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <p className="text-xs text-slate-400">{t('dashboard.noOffline')}</p>
-        </div>
-      ) : (
-        <div className="space-y-2.5 flex-1 overflow-y-auto">
-          {offlineDevices.map((d) => (
-            <div key={d.id} className="flex items-center gap-2.5 py-1">
-              <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-700 truncate">{d.hostname}</p>
-                <p className="text-xs text-slate-400">{d.ip_address}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+function ConfigletRunsTable({ executions, loading, t, lang }) {
+  if (loading) return (
+    <div className="flex items-center gap-2 text-slate-400 py-6">
+      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+      </svg>
+      <span className="text-sm">{t('common.loading')}</span>
     </div>
+  )
+  if (executions.length === 0) return (
+    <p className="text-sm text-slate-400 py-6 text-center">{t('dashboard.noConfigletRuns')}</p>
+  )
+
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-slate-100">
+          <th className="text-left text-xs font-semibold text-slate-400 uppercase tracking-wide pb-2.5 pr-4">
+            {t('dashboard.configletName')}
+          </th>
+          <th className="text-left text-xs font-semibold text-slate-400 uppercase tracking-wide pb-2.5 pr-4">
+            {t('dashboard.lastRunAt')}
+          </th>
+          <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide pb-2.5">
+            {t('dashboard.statusCol')}
+          </th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-50">
+        {executions.slice(0, 5).map((e) => (
+          <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+            <td className="py-3 pr-4">
+              <p className="font-medium text-slate-700 truncate max-w-[140px]">{e.configlet_name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {e.trigger_type === 'auto'
+                  ? (lang === 'tr' ? 'Otomatik' : 'Auto')
+                  : (e.triggered_by_username || '—')}
+              </p>
+            </td>
+            <td className="py-3 pr-4">
+              <span className="text-slate-600 text-xs">
+                {fullDateTime(e.started_at, lang)}
+                <span className="text-slate-400 ml-1">({relativeTime(e.started_at, lang)})</span>
+              </span>
+            </td>
+            <td className="py-3 text-right">
+              <div className="flex items-center justify-end gap-1">
+                {e.ok_count > 0 && (
+                  <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full border border-green-200">
+                    ✓ {e.ok_count}
+                  </span>
+                )}
+                {e.fail_count > 0 && (
+                  <span className="inline-flex items-center gap-1 bg-red-50 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full border border-red-200">
+                    ✗ {e.fail_count}
+                  </span>
+                )}
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 
@@ -173,7 +200,9 @@ export default function DashboardPage() {
   const { t, lang } = useLanguage()
   const [devices, setDevices] = useState([])
   const [schedulers, setSchedulers] = useState([])
+  const [executions, setExecutions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [execLoading, setExecLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([devicesApi.list(), schedulersApi.list()])
@@ -183,6 +212,11 @@ export default function DashboardPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
+
+    configletsApi.listExecutions()
+      .then(({ data }) => setExecutions(data))
+      .catch(() => {})
+      .finally(() => setExecLoading(false))
   }, [])
 
   const totalDevices = devices.length
@@ -190,7 +224,6 @@ export default function DashboardPage() {
   const offlineDevices = devices.filter((d) => d.status === 'offline')
   const offlineCount = offlineDevices.length
 
-  // Son yedekleme = en son çalışan zamanlayıcının last_run_at değeri
   const lastBackup = schedulers
     .map((s) => s.last_run_at)
     .filter(Boolean)
@@ -245,16 +278,19 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Bottom row */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Scheduler runs — 2/3 */}
-        <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 shadow-card p-5">
+      {/* Bottom row — 2 equal columns */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {/* Scheduler runs */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-card p-5">
           <p className="text-sm font-semibold text-slate-700 mb-4">{t('dashboard.recentRuns')}</p>
           <SchedulerRunsTable schedulers={schedulers} loading={loading} t={t} lang={lang} />
         </div>
 
-        {/* Offline devices panel — 1/3 */}
-        <OfflinePanel offlineDevices={offlineDevices} loading={loading} t={t} />
+        {/* Configlet runs */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-card p-5">
+          <p className="text-sm font-semibold text-slate-700 mb-4">{t('dashboard.recentConfigletRuns')}</p>
+          <ConfigletRunsTable executions={executions} loading={execLoading} t={t} lang={lang} />
+        </div>
       </div>
     </div>
   )

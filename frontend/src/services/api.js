@@ -105,4 +105,13 @@ export const settingsApi = {
   saveNotifications: (data) => api.post('/settings/notifications', data),
 }
 
+export const topologyApi = {
+  discover: () => api.post('/topology/discover'),
+  graph: () => api.get('/topology/graph'),
+  neighbors: () => api.get('/topology/neighbors'),
+  deleteNeighbor: (id) => api.delete(`/topology/neighbors/${id}`),
+  getSettings: () => api.get('/topology/settings'),
+  saveSettings: (data) => api.put('/topology/settings', data),
+}
+
 export default api

@@ -135,6 +135,89 @@ def _ssh_collect_sync(
         raise
 
 
+def _ssh_multi_sync(
+    device_type: str,
+    host: str,
+    username: str,
+    password: str,
+    commands: list,
+    timeout: int,
+    port: int = 22,
+    enable_secret: str | None = None,
+    kex_algs: list | None = None,
+    host_key_algs: list | None = None,
+    cipher_algs: list | None = None,
+) -> list:
+    """Tek SSH oturumunda birden fazla komut çalıştırır, çıktıları liste olarak döner."""
+    need_lock = bool(kex_algs or host_key_algs or cipher_algs)
+    saved = {}
+
+    if need_lock:
+        _kex_lock.acquire()
+        if kex_algs:
+            saved["kex"] = paramiko.Transport._preferred_kex
+            paramiko.Transport._preferred_kex = tuple(kex_algs)
+        if host_key_algs:
+            saved["keys"] = paramiko.Transport._preferred_keys
+            paramiko.Transport._preferred_keys = tuple(host_key_algs)
+        if cipher_algs:
+            saved["ciphers"] = paramiko.Transport._preferred_ciphers
+            paramiko.Transport._preferred_ciphers = tuple(cipher_algs)
+
+    conn = None
+    try:
+        params = {
+            "device_type": device_type,
+            "host": host,
+            "username": username,
+            "password": password,
+            "port": port,
+            "timeout": timeout,
+            "conn_timeout": timeout,
+            "global_delay_factor": 2,
+        }
+        if enable_secret:
+            params["secret"] = enable_secret
+        conn = ConnectHandler(**params)
+
+        if need_lock:
+            if "kex" in saved:
+                paramiko.Transport._preferred_kex = saved["kex"]
+            if "keys" in saved:
+                paramiko.Transport._preferred_keys = saved["keys"]
+            if "ciphers" in saved:
+                paramiko.Transport._preferred_ciphers = saved["ciphers"]
+            _kex_lock.release()
+            need_lock = False
+
+        if device_type.startswith("cisco") and not conn.check_enable_mode():
+            conn.enable()
+
+        outputs = []
+        for cmd in commands:
+            out = conn.send_command(cmd, read_timeout=60)
+            outputs.append(out)
+
+        conn.disconnect()
+        return outputs
+
+    except Exception:
+        if need_lock:
+            if "kex" in saved:
+                paramiko.Transport._preferred_kex = saved["kex"]
+            if "keys" in saved:
+                paramiko.Transport._preferred_keys = saved["keys"]
+            if "ciphers" in saved:
+                paramiko.Transport._preferred_ciphers = saved["ciphers"]
+            _kex_lock.release()
+        if conn:
+            try:
+                conn.disconnect()
+            except Exception:
+                pass
+        raise
+
+
 async def collect_config(device) -> dict:
     vendor = device.vendor.lower()
 

@@ -121,12 +121,14 @@ async def delete_device(
     try:
         await db.delete(device)
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="scheduler_conflict",
-        )
+        msg = str(exc.orig).lower() if exc.orig else ""
+        if "configlet_devices" in msg:
+            detail = "configlet_conflict"
+        else:
+            detail = "scheduler_conflict"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
 @router.post("/{device_id}/ping")
