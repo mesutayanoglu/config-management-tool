@@ -109,6 +109,7 @@ export const topologyApi = {
   discover: () => api.post('/topology/discover'),
   graph: () => api.get('/topology/graph'),
   neighbors: () => api.get('/topology/neighbors'),
+  deviceStatus: () => api.get('/topology/device-status'),
   deleteNeighbor: (id) => api.delete(`/topology/neighbors/${id}`),
   getSettings: () => api.get('/topology/settings'),
   saveSettings: (data) => api.put('/topology/settings', data),

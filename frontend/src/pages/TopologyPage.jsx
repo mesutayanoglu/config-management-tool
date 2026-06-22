@@ -38,7 +38,7 @@ function savePositions(nodes) {
 // Panel bölümü: seçili cihaz yokken özet, varsa filtrelenmiş liste
 function NeighborPanel({
   neighbors, nodes, selectedNodeId, onSelectNode,
-  onDeleteNeighbor, readOnly, t,
+  onDeleteNeighbor, readOnly, t, deviceStatus,
 }) {
   const selectedNode = useMemo(
     () => (selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null),
@@ -55,6 +55,7 @@ function NeighborPanel({
         type: 'known',
         device: selectedNode?.data,
         outgoing: neighbors.filter((nb) => nb.device_id === deviceId),
+        status: deviceStatus?.[deviceId],
       }
     }
 
@@ -72,7 +73,7 @@ function NeighborPanel({
       device: selectedNode?.data,
       foundBy,
     }
-  }, [selectedNodeId, selectedNode, neighbors])
+  }, [selectedNodeId, selectedNode, neighbors, deviceStatus])
 
   // Seçili cihaz yoksa özet göster
   if (!panelItems) {
@@ -109,7 +110,7 @@ function NeighborPanel({
   }
 
   if (panelItems.type === 'known') {
-    const { device, outgoing } = panelItems
+    const { device, outgoing, status } = panelItems
     return (
       <div className="p-4">
         <button
@@ -127,11 +128,29 @@ function NeighborPanel({
             </span>
           )}
         </div>
+        {status?.status === 'lldp_disabled' && (
+          <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+            <p className="text-xs font-semibold text-amber-700">{t('topology.lldpDisabled')}</p>
+            {status.message && (
+              <p className="text-[10px] font-mono text-amber-600 mt-1 break-words">{status.message}</p>
+            )}
+          </div>
+        )}
+        {status?.status === 'error' && (
+          <div className="mb-3 bg-red-50 border border-red-200 rounded-lg p-2.5">
+            <p className="text-xs font-semibold text-red-700">{t('topology.discoveryFailed')}</p>
+            {status.message && (
+              <p className="text-[10px] font-mono text-red-600 mt-1 break-words">{status.message}</p>
+            )}
+          </div>
+        )}
         <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
           {t('topology.deviceConnections')} ({outgoing.length})
         </h4>
         {outgoing.length === 0 ? (
-          <p className="text-xs text-slate-400">{t('topology.noOutgoingLldp')}</p>
+          !status || status.status === 'ok' ? (
+            <p className="text-xs text-slate-400">{t('topology.noOutgoingLldp')}</p>
+          ) : null
         ) : (
           <div className="space-y-2">
             {outgoing.map((nb) => (
@@ -253,6 +272,7 @@ export default function TopologyPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [neighbors, setNeighbors] = useState([])
+  const [deviceStatus, setDeviceStatus] = useState({})
   const [selectedNodeId, setSelectedNodeId] = useState(null)
   const [discovering, setDiscovering] = useState(false)
   const [lastDiscovered, setLastDiscovered] = useState(null)
@@ -288,11 +308,17 @@ export default function TopologyPage() {
 
   const loadGraph = useCallback(async () => {
     try {
-      const [graphRes, nbRes] = await Promise.all([
+      const [graphRes, nbRes, statusRes] = await Promise.all([
         topologyApi.graph(),
         topologyApi.neighbors(),
+        topologyApi.deviceStatus(),
       ])
       applyGraphData(graphRes.data, nbRes.data)
+      const statusByDeviceId = {}
+      Object.entries(statusRes.data || {}).forEach(([deviceId, info]) => {
+        statusByDeviceId[parseInt(deviceId, 10)] = info
+      })
+      setDeviceStatus(statusByDeviceId)
     } catch {
       // Henüz veri yok — boş sayfa göster
     }
@@ -478,6 +504,7 @@ export default function TopologyPage() {
                 onDeleteNeighbor={handleDeleteNeighbor}
                 readOnly={readOnly}
                 t={t}
+                deviceStatus={deviceStatus}
               />
 
               {/* Otomatik keşif ayarları — sadece super admin */}

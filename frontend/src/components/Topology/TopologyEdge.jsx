@@ -29,7 +29,7 @@ export default function TopologyEdge({
     setDstPos({ x: p2.x, y: p2.y })
   }, [edgePath])
 
-  const { local_port, neighbor_port, protocol } = data || {}
+  const { local_port, neighbor_port } = data || {}
 
   const shortPort = (p) => {
     if (!p) return null
@@ -45,7 +45,7 @@ export default function TopologyEdge({
 
   const srcLabel = shortPort(local_port)
   const dstLabel = shortPort(neighbor_port)
-  const edgeColor = protocol === 'cdp' ? '#f59e0b' : '#3b82f6'
+  const edgeColor = '#3b82f6'
 
   const renderBadge = (pos, label, side) => (
     <div

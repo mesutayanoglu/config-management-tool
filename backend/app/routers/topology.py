@@ -16,6 +16,11 @@ from app.models.user import User
 
 router = APIRouter()
 
+# Son keşif denemesinin cihaz bazlı sonucu (bellekte tutulur, backend
+# restart'ında sıfırlanır — bir sonraki keşifte yeniden doldurulur).
+# status: "ok" | "lldp_disabled" | "error"
+_device_status: dict[int, dict] = {}
+
 
 class TopologySettingsIn(BaseModel):
     auto_enabled: bool
@@ -27,7 +32,7 @@ async def discover(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_write_user),
 ):
-    from app.services.lldp_collector import discover_neighbors
+    from app.services.lldp_collector import LldpDisabledError, discover_neighbors
 
     result = await db.execute(
         select(Device).options(selectinload(Device.credential_profile))
@@ -74,13 +79,34 @@ async def discover(
                 ))
 
             await db.commit()
+            _device_status[device.id] = {"status": "ok", "message": None}
             success += 1
 
-        except Exception:
+        except LldpDisabledError as e:
             await db.rollback()
+            await db.execute(
+                delete(TopologyNeighbor).where(TopologyNeighbor.device_id == device.id)
+            )
+            await db.commit()
+            _device_status[device.id] = {"status": "lldp_disabled", "message": e.raw_output}
+            failed += 1
+
+        except Exception as e:
+            await db.rollback()
+            _device_status[device.id] = {"status": "error", "message": str(e)}
             failed += 1
 
     return {"discovered": success, "failed": failed}
+
+
+@router.get("/device-status")
+async def get_device_status(
+    _: User = Depends(get_current_user),
+):
+    return {
+        str(device_id): info
+        for device_id, info in _device_status.items()
+    }
 
 
 @router.get("/graph")

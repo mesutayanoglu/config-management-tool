@@ -44,6 +44,8 @@ const tr = {
   'topology.deviceConnections': 'Bağlantılar',
   'topology.discoveredBy': 'Keşfeden',
   'topology.noOutgoingLldp': 'Bu cihazdan LLDP verisi toplanamadı.',
+  'topology.lldpDisabled': 'Bu cihazda LLDP devre dışı. Etkinleştirip tekrar keşfedin.',
+  'topology.discoveryFailed': 'Son keşif denemesi başarısız oldu.',
   'topology.back': '← Geri',
   'topology.totalSummary': 'cihaz ·  bağlantı',
 
@@ -615,6 +617,8 @@ const en = {
   'topology.deviceConnections': 'Connections',
   'topology.discoveredBy': 'Discovered by',
   'topology.noOutgoingLldp': 'No LLDP data collected from this device.',
+  'topology.lldpDisabled': 'LLDP is disabled on this device. Enable it and discover again.',
+  'topology.discoveryFailed': 'The last discovery attempt failed.',
   'topology.back': '← Back',
   'topology.totalSummary': 'devices · edges',
 

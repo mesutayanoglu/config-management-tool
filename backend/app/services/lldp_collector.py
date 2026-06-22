@@ -1,5 +1,5 @@
 """
-LLDP/CDP komşu keşfi servisi.
+LLDP komşu keşfi servisi.
 Mevcut SSH altyapısını (_ssh_collect_sync) yeniden kullanır.
 Her vendor için özel parser fonksiyonu içerir.
 """
@@ -23,7 +23,26 @@ LLDP_COMMANDS = {
     "aruba_cx":  "show lldp neighbors detail",
 }
 
-CDP_COMMAND = "show cdp neighbors detail"
+# Cihaz çıktısında bu ifadelerden biri geçiyorsa LLDP o cihazda globalde
+# kapalıdır; bu durumda "komşu bulunamadı" ile karıştırmamak için ayrı
+# bir hata olarak işaretliyoruz (örn. Cisco: "% LLDP is not enabled").
+_LLDP_DISABLED_MARKERS = ("not enabled", "lldp is disabled", "lldp disabled")
+
+
+class LldpDisabledError(Exception):
+    """Cihazda LLDP globalde kapalıyken fırlatılır. Ham çıktıyı taşır."""
+
+    def __init__(self, raw_output: str):
+        self.raw_output = raw_output.strip()
+        super().__init__(self.raw_output)
+
+
+def _raise_if_lldp_disabled(output: str) -> None:
+    if not output:
+        return
+    lowered = output.lower()
+    if any(marker in lowered for marker in _LLDP_DISABLED_MARKERS):
+        raise LldpDisabledError(output)
 
 
 # ── Parser'lar ─────────────────────────────────────────────────────────────────
@@ -61,44 +80,6 @@ def _parse_cisco_lldp(output: str) -> list[dict]:
                 "neighbor_ip": mgmt_ip,
                 "neighbor_port": port_id,
                 "protocol": "lldp",
-            })
-    return neighbors
-
-
-def _parse_cisco_cdp(output: str) -> list[dict]:
-    neighbors = []
-    blocks = re.split(r'-{10,}', output)
-    for block in blocks:
-        if not block.strip():
-            continue
-
-        device_id = None
-        m = re.search(r'Device ID:\s*(\S+)', block, re.IGNORECASE)
-        if m:
-            device_id = m.group(1).split('.')[0]
-
-        ip_addr = None
-        m = re.search(r'IP address:\s*([\d.]+)', block, re.IGNORECASE)
-        if m:
-            ip_addr = m.group(1)
-
-        local_intf = None
-        m = re.search(r'Interface:\s*(\S+),', block, re.IGNORECASE)
-        if m:
-            local_intf = m.group(1).rstrip(',')
-
-        remote_port = None
-        m = re.search(r'Port ID \(outgoing port\):\s*(\S+)', block, re.IGNORECASE)
-        if m:
-            remote_port = m.group(1)
-
-        if local_intf and (device_id or ip_addr):
-            neighbors.append({
-                "local_port": local_intf,
-                "neighbor_hostname": device_id,
-                "neighbor_ip": ip_addr,
-                "neighbor_port": remote_port,
-                "protocol": "cdp",
             })
     return neighbors
 
@@ -324,7 +305,7 @@ def _parse(vendor: str, output: str) -> list[dict]:
 
 async def discover_neighbors(device) -> list[dict]:
     """
-    Cihaza SSH ile bağlanır, LLDP/CDP komutunu çalıştırır,
+    Cihaza SSH ile bağlanır, LLDP komutunu çalıştırır,
     çıktıyı ayrıştırarak komşu listesi döner.
     """
     vendor = device.vendor.lower()
@@ -386,31 +367,9 @@ async def discover_neighbors(device) -> list[dict]:
         ),
     )
 
-    neighbors = _parse(vendor, output)
+    _raise_if_lldp_disabled(output)
 
-    # Cisco'da LLDP boşsa CDP dene
-    if vendor == "cisco" and not neighbors:
-        try:
-            cdp_output = await loop.run_in_executor(
-                None,
-                partial(
-                    _ssh_collect_sync,
-                    device_type,
-                    device.ip_address,
-                    username,
-                    password,
-                    CDP_COMMAND,
-                    10,
-                    port,
-                    enable_secret,
-                    kex_algs,
-                    host_key_algs,
-                    cipher_algs,
-                ),
-            )
-            neighbors = _parse_cisco_cdp(cdp_output)
-        except Exception:
-            pass
+    neighbors = _parse(vendor, output)
 
     return neighbors
 
@@ -434,6 +393,8 @@ async def _discover_aruba_neighbors(
             10, port, enable_secret, kex_algs, host_key_algs, cipher_algs,
         ),
     )
+
+    _raise_if_lldp_disabled(brief)
 
     port_numbers = _parse_aruba_brief_ports(brief)
     if not port_numbers:
