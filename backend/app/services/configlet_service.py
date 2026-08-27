@@ -7,7 +7,8 @@ from functools import partial
 from typing import AsyncGenerator
 
 import paramiko
-from jinja2 import Template, TemplateError
+from jinja2 import TemplateError
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 from netmiko import ConnectHandler
 
 from app.services.ssh_collector import (
@@ -28,8 +29,17 @@ def extract_variables(content: str) -> list[str]:
     return result
 
 
+# SSTI/RCE koruması: kullanıcı tarafından yazılan configlet içeriği burada render
+# edilir. Sandbox'sız jinja2.Template kullanmak `{{ ''.__class__.__mro__[1]
+# .__subclasses__() }}` gibi ifadelerle Python internal nesnelerine (ve dolayısıyla
+# RCE'ye) erişim sağlar. ImmutableSandboxedEnvironment tehlikeli attribute erişimini
+# (örn. __class__, __globals__, __mro__, __subclasses__, __init__, __base__) ve
+# mutable nesnelerin template içinden değiştirilmesini engeller.
+_sandbox_env = ImmutableSandboxedEnvironment()
+
+
 def render_template(content: str, variables: dict) -> str:
-    template = Template(content)
+    template = _sandbox_env.from_string(content)
     return template.render(**variables)
 
 
