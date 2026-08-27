@@ -228,3 +228,7 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Hermes/Claude Code agent orchestration (local only)
+.claude/
+.agent/
