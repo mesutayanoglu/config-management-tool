@@ -134,6 +134,93 @@ def _execute_configlet_sync(
         raise
 
 
+def _execute_paloalto_raw_sync(
+    device_type: str,
+    host: str,
+    username: str,
+    password: str,
+    commands: list[str],
+    port: int = 22,
+    enable_secret: str | None = None,
+    kex_algs: list | None = None,
+    host_key_algs: list | None = None,
+    cipher_algs: list | None = None,
+    _log_queue: queue_module.Queue | None = None,
+) -> str:
+    """Palo Alto: config mode otomatik açılıp kapatılmaz. PAN-OS operational (>) ve
+    configuration (#) komutlarını kesin ayırdığından, şablon satırları (configure/
+    exit/end/commit dahil) kullanıcının cihaza elle yazdığı sırayla, olduğu gibi
+    gönderilir. send_config_set yerine send_command_timing kullanılır çünkü mod
+    geçişlerinde prompt şekli değişir (>  →  #  →  [edit]#), sabit regex'e güvenilemez."""
+    need_lock = bool(kex_algs or host_key_algs or cipher_algs)
+    saved = {}
+
+    if need_lock:
+        _kex_lock.acquire()
+        if kex_algs:
+            saved["kex"] = paramiko.Transport._preferred_kex
+            paramiko.Transport._preferred_kex = tuple(kex_algs)
+        if host_key_algs:
+            saved["keys"] = paramiko.Transport._preferred_keys
+            paramiko.Transport._preferred_keys = tuple(host_key_algs)
+        if cipher_algs:
+            saved["ciphers"] = paramiko.Transport._preferred_ciphers
+            paramiko.Transport._preferred_ciphers = tuple(cipher_algs)
+
+    conn = None
+    try:
+        params = {
+            "device_type": device_type,
+            "host": host,
+            "username": username,
+            "password": password,
+            "port": port,
+            "timeout": 30,
+            "conn_timeout": 30,
+            "global_delay_factor": 2,
+        }
+        if enable_secret:
+            params["secret"] = enable_secret
+
+        conn = ConnectHandler(**params)
+
+        if need_lock:
+            if "kex" in saved:
+                paramiko.Transport._preferred_kex = saved["kex"]
+            if "keys" in saved:
+                paramiko.Transport._preferred_keys = saved["keys"]
+            if "ciphers" in saved:
+                paramiko.Transport._preferred_ciphers = saved["ciphers"]
+            _kex_lock.release()
+            need_lock = False
+
+        if _log_queue is not None:
+            _log_queue.put({"type": "sending", "count": len(commands)})
+
+        outputs = []
+        for cmd in commands:
+            outputs.append(conn.send_command_timing(cmd, strip_prompt=False, strip_command=False))
+
+        conn.disconnect()
+        return "\n".join(outputs)
+
+    except Exception:
+        if need_lock:
+            if "kex" in saved:
+                paramiko.Transport._preferred_kex = saved["kex"]
+            if "keys" in saved:
+                paramiko.Transport._preferred_keys = saved["keys"]
+            if "ciphers" in saved:
+                paramiko.Transport._preferred_ciphers = saved["ciphers"]
+            _kex_lock.release()
+        if conn:
+            try:
+                conn.disconnect()
+            except Exception:
+                pass
+        raise
+
+
 def _build_exec_params(device):
     """Extract connection params from device model."""
     vendor = device.vendor.lower()
@@ -190,13 +277,14 @@ async def execute_on_device(device, rendered_content: str) -> dict:
         }
 
     device_type, username, password, port, enable_secret, kex_algs, host_key_algs, cipher_algs = _build_exec_params(device)
+    exec_fn = _execute_paloalto_raw_sync if device_type == "paloalto_panos" else _execute_configlet_sync
 
     try:
         loop = asyncio.get_running_loop()
         output = await loop.run_in_executor(
             None,
             partial(
-                _execute_configlet_sync,
+                exec_fn,
                 device_type, device.ip_address, username, password,
                 commands, port, enable_secret, kex_algs, host_key_algs, cipher_algs,
             ),
@@ -243,6 +331,7 @@ async def execute_on_device_streaming(device, rendered_content: str) -> AsyncGen
         return
 
     device_type, username, password, port, enable_secret, kex_algs, host_key_algs, cipher_algs = _build_exec_params(device)
+    exec_fn = _execute_paloalto_raw_sync if device_type == "paloalto_panos" else _execute_configlet_sync
 
     yield {**base, "type": "connecting"}
 
@@ -251,7 +340,7 @@ async def execute_on_device_streaming(device, rendered_content: str) -> AsyncGen
 
     def _run():
         try:
-            out = _execute_configlet_sync(
+            out = exec_fn(
                 device_type, device.ip_address, username, password,
                 commands, port, enable_secret, kex_algs, host_key_algs, cipher_algs,
                 _log_queue=log_q,

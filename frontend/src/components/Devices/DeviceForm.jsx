@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { organizationsApi } from '../../services/api'
 import { useLanguage } from '../../i18n'
+import { vendorLabel } from '../../utils/vendorLabels'
 
-const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba']
+const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba', 'paloalto']
 const DEFAULT_COMMANDS = {
   cisco: 'show running-config',
   fortigate: 'show full-configuration',
   huawei: 'display current-configuration',
   aruba: 'show running-config',
+  paloalto: '(PAN-OS API export kullanılır, komut gerekmez)',
 }
 
 export default function DeviceForm({ onSubmit, onCancel, profiles = [] }) {
@@ -136,7 +138,7 @@ export default function DeviceForm({ onSubmit, onCancel, profiles = [] }) {
       <div>
         <label className={labelCls}>{t('deviceForm.brand')} <span className="text-red-500">*</span></label>
         <select name="vendor" value={form.vendor} onChange={handleChange} className={inputCls}>
-          {VENDORS.map((v) => <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>)}
+          {VENDORS.map((v) => <option key={v} value={v}>{vendorLabel(v)}</option>)}
         </select>
       </div>
 

@@ -1,13 +1,15 @@
+import json
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.security import get_current_user, get_write_user
 from app.models.credential_profile import CredentialProfile
 from app.models.device import Device
@@ -15,9 +17,21 @@ from app.models.organization import Site, Organization  # modellerin kayıt sır
 from app.models.user import User
 from app.schemas.device import DeviceCreate, DeviceOut, DeviceUpdate
 from app.services.ping_service import ping_device
-from app.services.ssh_collector import collect_config
+from app.services.ssh_collector import collect_config, collect_config_stream
 
 router = APIRouter()
+
+
+def _collect_error_detail(msg: str) -> str:
+    if "401" in msg or "Bad credentials" in msg:
+        return "GitHub token geçersiz. Ayarlar sayfasından token'ı güncelleyin."
+    if "403" in msg or "not accessible" in msg:
+        return "GitHub token'ının 'Contents: Read and Write' izni yok."
+    if "404" in msg and "github" in msg.lower():
+        return "GitHub reposu bulunamadı. Ayarlar sayfasından repo adını kontrol edin."
+    if any(k in msg.lower() for k in ("authentication", "ssh", "socket", "connect", "timed out")):
+        return f"Bağlantı kurulamadı: {msg[:120]}"
+    return f"Config alınamadı: {msg[:200]}"
 
 
 def _device_out(device: Device) -> DeviceOut:
@@ -163,18 +177,7 @@ async def collect(
     try:
         result_data = await collect_config(device)
     except Exception as exc:
-        msg = str(exc)
-        if "401" in msg or "Bad credentials" in msg:
-            detail = "GitHub token geçersiz. Ayarlar sayfasından token'ı güncelleyin."
-        elif "403" in msg or "not accessible" in msg:
-            detail = "GitHub token'ının 'Contents: Read and Write' izni yok."
-        elif "404" in msg and "github" in msg.lower():
-            detail = "GitHub reposu bulunamadı. Ayarlar sayfasından repo adını kontrol edin."
-        elif any(k in msg.lower() for k in ("authentication", "ssh", "socket", "connect", "timed out")):
-            detail = f"SSH bağlantısı kurulamadı: {msg[:120]}"
-        else:
-            detail = f"Config alınamadı: {msg[:200]}"
-        raise HTTPException(status_code=500, detail=detail)
+        raise HTTPException(status_code=500, detail=_collect_error_detail(str(exc)))
 
     if result_data.get("model"):
         device.model = result_data["model"]
@@ -199,3 +202,62 @@ async def collect(
         "version": device.version,
         "last_collected_at": device.last_collected_at.isoformat(),
     }
+
+
+@router.post("/{device_id}/collect-stream")
+async def collect_stream(
+    device_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_write_user),
+):
+    """SSE: adım adım ilerleme olayları (connecting/fetched/saving/done) yollar.
+    Kullanıcı işlem bitene kadar modalda kalır, süreç bir sayfa geçişiyle bölünmez."""
+    result = await db.execute(
+        select(Device).options(selectinload(Device.credential_profile))
+        .where(Device.id == device_id)
+    )
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cihaz bulunamadı")
+
+    device_id_snap = device.id
+    hostname_snap = device.hostname
+    ip_snap = device.ip_address
+
+    async def generate():
+        result_data = None
+        async for event in collect_config_stream(device):
+            if event.get("type") == "done":
+                if event.get("status") == "success":
+                    result_data = event
+                else:
+                    event = {**event, "error": _collect_error_detail(event.get("error", ""))}
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+        if result_data:
+            try:
+                async with AsyncSessionLocal() as save_db:
+                    r = await save_db.execute(select(Device).where(Device.id == device_id_snap))
+                    dev = r.scalar_one_or_none()
+                    if dev:
+                        if result_data.get("model"):
+                            dev.model = result_data["model"]
+                        if result_data.get("version"):
+                            dev.version = result_data["version"]
+                        dev.last_collected_at = datetime.now(timezone.utc)
+                        await save_db.commit()
+
+                        if result_data.get("changed"):
+                            from app.services.email_service import send_config_change_notification
+                            await send_config_change_notification(
+                                hostname_snap, ip_snap,
+                                result_data["old_content"], result_data["new_content"],
+                            )
+            except Exception:
+                pass  # kayıt hatası akışı bozmasın; kullanıcı zaten "done" olayını gördü
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

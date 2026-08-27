@@ -16,6 +16,9 @@ bcrypt==4.2.0
 netmiko==4.4.0
 paramiko>=3.3.0,<4.0.0
 
+# Palo Alto XML API (config export)
+requests>=2.31.0
+
 # GitHub
 PyGithub==2.4.0
 

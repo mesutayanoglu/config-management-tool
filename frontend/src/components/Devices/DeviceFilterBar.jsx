@@ -13,11 +13,12 @@
  */
 import { useState, useRef, useEffect } from 'react'
 import { useLanguage } from '../../i18n'
+import { vendorLabel } from '../../utils/vendorLabels'
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 
 /** DeviceForm ile tutarlı vendor listesi */
-const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba']
+const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba', 'paloalto']
 
 /** Status → renk nokta sınıfı eşleşmesi */
 const STATUS_META = [
@@ -114,7 +115,7 @@ function FilterDropdown({ label, options, selected, onChange }) {
               {opt.dotClass && (
                 <span className={`w-2 h-2 rounded-full shrink-0 ${opt.dotClass}`} />
               )}
-              <span className="text-sm text-gray-700 capitalize">{opt.label}</span>
+              <span className="text-sm text-gray-700">{vendorLabel(opt.label)}</span>
             </label>
           ))}
         </div>

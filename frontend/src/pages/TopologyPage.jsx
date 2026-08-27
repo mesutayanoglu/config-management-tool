@@ -473,6 +473,7 @@ export default function TopologyPage() {
                 const colors = {
                   cisco: '#3b82f6', fortigate: '#ef4444',
                   huawei: '#f43f5e', aruba: '#f97316', aruba_cx: '#f59e0b',
+                  paloalto: '#10b981',
                 }
                 return colors[v] || '#3b82f6'
               }}

@@ -7,6 +7,7 @@ const VENDOR_COLORS = {
   huawei:    { bg: 'bg-rose-50',   border: 'border-rose-400',  selBorder: 'border-rose-600',  text: 'text-rose-700',  badge: 'bg-rose-100 text-rose-700' },
   aruba:     { bg: 'bg-orange-50', border: 'border-orange-400',selBorder: 'border-orange-600',text: 'text-orange-700',badge: 'bg-orange-100 text-orange-700' },
   aruba_cx:  { bg: 'bg-amber-50',  border: 'border-amber-400', selBorder: 'border-amber-600', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' },
+  paloalto:  { bg: 'bg-emerald-50', border: 'border-emerald-400', selBorder: 'border-emerald-600', text: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
 }
 
 function VendorIcon({ vendor }) {

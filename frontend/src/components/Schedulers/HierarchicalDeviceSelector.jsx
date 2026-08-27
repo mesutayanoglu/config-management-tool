@@ -7,6 +7,7 @@ const VENDOR_COLOR = {
   huawei: 'text-orange-500',
   aruba: 'text-purple-500',
   aruba_cx: 'text-purple-500',
+  paloalto: 'text-emerald-500',
 }
 
 function Checkbox({ checked, indeterminate, onChange }) {

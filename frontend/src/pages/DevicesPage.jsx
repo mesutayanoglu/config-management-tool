@@ -8,6 +8,7 @@ import DeviceFilterBar from '../components/Devices/DeviceFilterBar'
 import DeviceAddModal from '../components/Devices/DeviceAddModal'
 import DeviceEditModal from '../components/Devices/DeviceEditModal'
 import DeviceImportModal from '../components/Devices/DeviceImportModal'
+import DeviceCollectModal from '../components/Devices/DeviceCollectModal'
 import Toast from '../components/Toast'
 import ConfirmModal from '../components/ConfirmModal'
 
@@ -26,6 +27,7 @@ export default function DevicesPage() {
   const [confirm, setConfirm] = useState(null)
   const [editingDevice, setEditingDevice] = useState(null)
   const [collectingIds, setCollectingIds] = useState(new Set())
+  const [collectingDevice, setCollectingDevice] = useState(null)
 
   // ── Filtre durumu ─────────────────────────────────────────────────────────
   const [filters, setFilters] = useState({ search: '', vendors: [], statuses: [] })
@@ -113,23 +115,24 @@ export default function DevicesPage() {
     showToast(t('devices.toast.created'))
   }
 
-  async function handleCollect(id) {
+  function handleCollect(id) {
     if (collectingIds.has(id)) return
+    const device = devices.find(d => d.id === id)
+    if (!device) return
     setCollectingIds(prev => new Set([...prev, id]))
-    try {
-      await devicesApi.collect(id)
-      showToast(t('devices.toast.configOk'))
-      loadDevices()
-    } catch (err) {
-      const detail = err?.response?.data?.detail
-      showToast(detail || t('devices.toast.configFail'), 'error')
-    } finally {
+    setCollectingDevice(device)
+  }
+
+  function handleCollectClose() {
+    if (collectingDevice) {
       setCollectingIds(prev => {
         const next = new Set(prev)
-        next.delete(id)
+        next.delete(collectingDevice.id)
         return next
       })
     }
+    setCollectingDevice(null)
+    loadDevices()
   }
 
   function handleDelete(id) {
@@ -260,6 +263,15 @@ export default function DevicesPage() {
           onCancel={() => setConfirm(null)}
           confirmLabel={t('common.delete')}
           cancelLabel={t('common.cancel')}
+        />
+      )}
+
+      {/* Config alma ilerleme modalı */}
+      {collectingDevice && (
+        <DeviceCollectModal
+          device={collectingDevice}
+          onClose={handleCollectClose}
+          onDone={loadDevices}
         />
       )}
 

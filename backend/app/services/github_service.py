@@ -54,9 +54,24 @@ class GitHubService:
 
         repo = self.repo
         branch = repo.default_branch
-        ref = repo.get_git_ref(f"heads/{branch}")
-        latest_commit = repo.get_git_commit(ref.object.sha)
-        base_tree = latest_commit.tree
+
+        try:
+            ref = repo.get_git_ref(f"heads/{branch}")
+        except GithubException as exc:
+            if exc.status != 409:
+                raise
+            # Repo'da hiç commit yoksa (tamamen boş repo) Git Data API (blob/tree/commit)
+            # tümüyle 409 döner; Contents API repo'yu ilk dosyayla initialize edebilir.
+            repo.create_file(
+                f"{device_uid}/_device_info.yaml", commit_message, device_info, branch=branch,
+            )
+            repo.create_file(
+                f"{device_uid}/running-config.txt", commit_message, content, branch=branch,
+            )
+            return f"{device_uid}/running-config.txt"
+
+        parents = [repo.get_git_commit(ref.object.sha)]
+        base_tree = parents[0].tree
 
         info_blob = repo.create_git_blob(device_info, "utf-8")
         config_blob = repo.create_git_blob(content, "utf-8")
@@ -79,7 +94,7 @@ class GitHubService:
             base_tree,
         )
 
-        new_commit = repo.create_git_commit(commit_message, tree, [latest_commit])
+        new_commit = repo.create_git_commit(commit_message, tree, parents)
         ref.edit(new_commit.sha)
 
         return f"{device_uid}/running-config.txt"

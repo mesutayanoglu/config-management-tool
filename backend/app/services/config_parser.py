@@ -52,4 +52,9 @@ def parse_model_version(vendor: str, config_text: str) -> dict:
             if m:
                 model = m.group(1)
 
+    elif vendor == "paloalto":
+        # "show config running" set-format çıktısında model/versiyon bilgisi yok;
+        # cihaz bilgisi ancak "show system info" ile alınabilir (ayrı komut, henüz toplanmıyor).
+        pass
+
     return {"model": model, "version": version}

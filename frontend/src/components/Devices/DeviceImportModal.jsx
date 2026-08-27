@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { organizationsApi, devicesApi } from '../../services/api'
 import { useLanguage } from '../../i18n'
 
-const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba', 'aruba_cx']
+const VENDORS = ['cisco', 'fortigate', 'huawei', 'aruba', 'aruba_cx', 'paloalto']
 const DEFAULT_COMMANDS = {
   cisco: 'show running-config',
   fortigate: 'show full-configuration',
   huawei: 'display current-configuration',
   aruba: 'show running-config',
   aruba_cx: 'show running-config',
+  paloalto: '(PAN-OS API export kullanılır, komut gerekmez)',
 }
 const CSV_HEADERS = ['location', 'site', 'hostname', 'ip_address', 'vendor', 'credential_profile', 'ssh_username', 'ssh_password']
 
@@ -264,7 +265,7 @@ export default function DeviceImportModal({ onClose, onImportComplete, profiles 
                 <code className="block bg-gray-50 rounded px-3 py-2 text-gray-600">
                   {CSV_HEADERS.join(', ')}
                 </code>
-                <p>{t('devices.import.vendorHint')}: cisco, fortigate, huawei, aruba, aruba_cx</p>
+                <p>{t('devices.import.vendorHint')}: cisco, fortigate, huawei, aruba, aruba_cx, paloalto</p>
               </div>
             </div>
           )}

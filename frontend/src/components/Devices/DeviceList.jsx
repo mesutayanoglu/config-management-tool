@@ -5,9 +5,10 @@
  * Filtreleme DevicesPage seviyesinde yapılır; bu bileşen
  * sadece kendisine gelen `devices` dizisini render eder.
  *
- * Sütunlar: HOSTNAME | IP | MARKA | SON CONFIG | DURUM | İŞLEMLER
+ * Sütunlar: HOSTNAME | IP | MARKA | MODEL | VERSİYON | SON CONFIG | DURUM | İŞLEMLER
  */
 import { useLanguage } from '../../i18n'
+import { vendorLabel } from '../../utils/vendorLabels'
 
 export default function DeviceList({
   devices,       // Filtrelenmiş cihaz listesi (DevicesPage'den türetilir)
@@ -38,6 +39,8 @@ export default function DeviceList({
               t('deviceList.col.hostname'),
               t('deviceList.col.ip'),
               t('deviceList.col.brand'),
+              t('deviceList.col.model'),
+              t('deviceList.col.version'),
               t('deviceList.col.lastConfig'),
               t('deviceList.col.status'),
               t('deviceList.col.actions'),
@@ -78,14 +81,19 @@ export default function DeviceList({
                   {d.ip_address}
                 </td>
 
-                {/* Marka + model/versiyon (config çekildikten sonra dolar) */}
+                {/* Marka */}
                 <td className="px-4 py-3">
-                  <span className="capitalize text-gray-700">{d.vendor}</span>
-                  {(d.model || d.version) && (
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {[d.model, d.version].filter(Boolean).join(' • ')}
-                    </div>
-                  )}
+                  <span className="text-gray-700">{vendorLabel(d.vendor)}</span>
+                </td>
+
+                {/* Model — config çekildikten sonra dolar */}
+                <td className="px-4 py-3 text-xs text-gray-500">
+                  {d.model || <span className="text-gray-300">—</span>}
+                </td>
+
+                {/* Versiyon — config çekildikten sonra dolar */}
+                <td className="px-4 py-3 text-xs text-gray-500">
+                  {d.version || <span className="text-gray-300">—</span>}
                 </td>
 
                 {/* Son config tarihi — yoksa uzun çizgi */}
@@ -171,7 +179,7 @@ export default function DeviceList({
           {/* ── Boş durum mesajı ── */}
           {devices.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">
+              <td colSpan={8} className="px-4 py-12 text-center text-gray-400 text-sm">
                 {/* Filtre aktifken "eşleşme yok", aksi halde "henüz cihaz yok" */}
                 {allCount > 0
                   ? t('deviceFilter.noResults')

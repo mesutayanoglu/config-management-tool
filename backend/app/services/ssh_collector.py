@@ -8,6 +8,7 @@ from netmiko import ConnectHandler
 
 from app.services.github_service import github_service as github
 from app.services.config_parser import parse_model_version
+from app.services.paloalto_api import collect_sync as _paloalto_collect_sync
 
 # ── Global default: legacy KEX algoritmaları etkinleştir ─────────────────────
 # Paramiko 3.x'te bu algoritmalar _kex_info'da mevcuttur ancak
@@ -43,6 +44,7 @@ VENDOR_DEVICE_TYPE_SSH = {
     "huawei":    "huawei",
     "aruba":     "aruba_osswitch",
     "aruba_cx":  "aruba_oscx",
+    "paloalto":  "paloalto_panos",
 }
 
 VENDOR_DEVICE_TYPE_TELNET = {
@@ -51,6 +53,7 @@ VENDOR_DEVICE_TYPE_TELNET = {
     "huawei":    "huawei_telnet",
     "aruba":     "aruba_osswitch",     # Netmiko'da telnet varyantı yok
     "aruba_cx":  "aruba_oscx",         # Netmiko'da telnet varyantı yok
+    "paloalto":  "paloalto_panos",     # Netmiko'da telnet varyantı yok
 }
 
 
@@ -218,7 +221,9 @@ def _ssh_multi_sync(
         raise
 
 
-async def collect_config(device) -> dict:
+async def _fetch_raw_config(device) -> tuple[str, dict]:
+    """Cihaza bağlanıp ham config çıktısını çeker (GitHub'a dokunmaz).
+    Dönüş: (output, parsed) — parsed = {"model": ..., "version": ...}."""
     vendor = device.vendor.lower()
 
     # Kimlik bilgileri: önce profil, yoksa cihazın kendi alanları
@@ -242,6 +247,21 @@ async def collect_config(device) -> dict:
         host_key_algs = None
         cipher_algs = None
 
+    loop = asyncio.get_event_loop()
+
+    if vendor == "paloalto":
+        # SSH/CLI yerine PAN-OS XML API üzerinden çalışan config export.
+        # GUI'deki Device > Operations > 'Export configuration version' ile
+        # birebir aynı XML'i üretir (aynı API endpoint'i: type=export&category=configuration).
+        result = await loop.run_in_executor(
+            None,
+            partial(_paloalto_collect_sync, device.ip_address, username, password, 443, 30),
+        )
+        output = result["config"]
+        if not output or not output.strip():
+            raise RuntimeError("Palo Alto API bağlantısı kuruldu ancak config çıktısı boş geldi.")
+        return output, {"model": result.get("model"), "version": result.get("version")}
+
     if conn_type == "telnet":
         device_type = VENDOR_DEVICE_TYPE_TELNET.get(vendor, "cisco_ios_telnet")
         # Telnet'te SSH algoritma overrideleri anlamsız, temizle
@@ -251,7 +271,6 @@ async def collect_config(device) -> dict:
     else:
         device_type = VENDOR_DEVICE_TYPE_SSH.get(vendor, "cisco_ios")
 
-    loop = asyncio.get_event_loop()
     output = await loop.run_in_executor(
         None,
         partial(
@@ -286,17 +305,49 @@ async def collect_config(device) -> dict:
             f"{stripped[:300]}"
         )
 
-    old_content = await github.get_config(device.device_uid)
-    github_path = await github.commit_config(
-        device.device_uid, device.hostname, device.ip_address, device.vendor, output
-    )
-    parsed = parse_model_version(device.vendor, output)
-    changed = old_content is not None and old_content.strip() != output.strip()
+    return output, parse_model_version(device.vendor, output)
 
-    return {
-        "github_path": github_path,
-        "changed": changed,
-        "old_content": old_content or "",
-        "new_content": output,
-        **parsed,
-    }
+
+async def collect_config_stream(device):
+    """Adım adım ilerleme olayları üreten async generator.
+    Olay tipleri: connecting | fetched | saving | done (status: success|failed)."""
+    try:
+        yield {"type": "connecting"}
+        output, parsed = await _fetch_raw_config(device)
+
+        yield {"type": "fetched"}
+        old_content = await github.get_config(device.device_uid)
+
+        yield {"type": "saving"}
+        github_path = await github.commit_config(
+            device.device_uid, device.hostname, device.ip_address, device.vendor, output
+        )
+        changed = old_content is not None and old_content.strip() != output.strip()
+
+        yield {
+            "type": "done",
+            "status": "success",
+            "github_path": github_path,
+            "changed": changed,
+            "old_content": old_content or "",
+            "new_content": output,
+            **parsed,
+        }
+    except Exception as exc:
+        yield {"type": "done", "status": "failed", "error": str(exc)}
+
+
+async def collect_config(device) -> dict:
+    """Tek seferde sonuç dönen sürüm (scheduler gibi UI'sız çağıranlar için)."""
+    result = None
+    async for event in collect_config_stream(device):
+        if event.get("type") == "done":
+            result = event
+
+    if result is None:
+        raise RuntimeError("Config toplama tamamlanamadı.")
+    if result.get("status") == "failed":
+        raise RuntimeError(result.get("error") or "Config alınamadı.")
+
+    result = {k: v for k, v in result.items() if k not in ("type", "status")}
+    return result
