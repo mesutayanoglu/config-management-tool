@@ -111,7 +111,7 @@ Talimatlar:
             "claude", "-p", prompt,
             "--output-format", "json",
             "--max-turns", str(max_turns),
-            "--dangerously-skip-permissions",
+            "--allowedTools", "Read,Write,Edit,Bash,Glob,Grep",
             "--fallback-model", "haiku",
         ],
         cwd=REPO, capture_output=True, text=True, timeout=1800,
