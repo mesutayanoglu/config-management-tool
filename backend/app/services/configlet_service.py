@@ -1,5 +1,4 @@
 import asyncio
-import json
 import queue as queue_module
 import re
 import time
@@ -10,11 +9,7 @@ import paramiko
 from jinja2 import Template, TemplateError
 from netmiko import ConnectHandler
 
-from app.services.ssh_collector import (
-    VENDOR_DEVICE_TYPE_SSH,
-    VENDOR_DEVICE_TYPE_TELNET,
-    _kex_lock,
-)
+from app.services.ssh_collector import _kex_lock, build_conn_params
 
 
 def extract_variables(content: str) -> list[str]:
@@ -221,41 +216,6 @@ def _execute_paloalto_raw_sync(
         raise
 
 
-def _build_exec_params(device):
-    """Extract connection params from device model."""
-    vendor = device.vendor.lower()
-
-    if device.credential_profile:
-        p = device.credential_profile
-        conn_type = (p.connection_type or "ssh").lower()
-        username = p.username
-        password = p.password
-        port = p.port
-        enable_secret = p.enable_secret or None
-        kex_algs = json.loads(p.kex_algs) if p.kex_algs else None
-        host_key_algs = json.loads(p.host_key_algs) if p.host_key_algs else None
-        cipher_algs = json.loads(p.cipher_algs) if p.cipher_algs else None
-    else:
-        conn_type = "ssh"
-        username = device.ssh_username
-        password = device.ssh_password
-        port = 22
-        enable_secret = None
-        kex_algs = None
-        host_key_algs = None
-        cipher_algs = None
-
-    if conn_type == "telnet":
-        device_type = VENDOR_DEVICE_TYPE_TELNET.get(vendor, "cisco_ios_telnet")
-        kex_algs = None
-        host_key_algs = None
-        cipher_algs = None
-    else:
-        device_type = VENDOR_DEVICE_TYPE_SSH.get(vendor, "cisco_ios")
-
-    return device_type, username, password, port, enable_secret, kex_algs, host_key_algs, cipher_algs
-
-
 async def execute_on_device(device, rendered_content: str) -> dict:
     """Original concurrent execution (non-streaming)."""
     start = time.monotonic()
@@ -276,7 +236,8 @@ async def execute_on_device(device, rendered_content: str) -> dict:
             "duration_ms": 0,
         }
 
-    device_type, username, password, port, enable_secret, kex_algs, host_key_algs, cipher_algs = _build_exec_params(device)
+    params = build_conn_params(device)
+    device_type = params["device_type"]
     exec_fn = _execute_paloalto_raw_sync if device_type == "paloalto_panos" else _execute_configlet_sync
 
     try:
@@ -285,8 +246,9 @@ async def execute_on_device(device, rendered_content: str) -> dict:
             None,
             partial(
                 exec_fn,
-                device_type, device.ip_address, username, password,
-                commands, port, enable_secret, kex_algs, host_key_algs, cipher_algs,
+                device_type, params["host"], params["username"], params["password"],
+                commands, params["port"], params["enable_secret"],
+                params["kex_algs"], params["host_key_algs"], params["cipher_algs"],
             ),
         )
         duration_ms = int((time.monotonic() - start) * 1000)
@@ -330,7 +292,8 @@ async def execute_on_device_streaming(device, rendered_content: str) -> AsyncGen
                "error": "Çalıştırılacak komut bulunamadı.", "duration_ms": 0, "output": None}
         return
 
-    device_type, username, password, port, enable_secret, kex_algs, host_key_algs, cipher_algs = _build_exec_params(device)
+    params = build_conn_params(device)
+    device_type = params["device_type"]
     exec_fn = _execute_paloalto_raw_sync if device_type == "paloalto_panos" else _execute_configlet_sync
 
     yield {**base, "type": "connecting"}
@@ -341,8 +304,9 @@ async def execute_on_device_streaming(device, rendered_content: str) -> AsyncGen
     def _run():
         try:
             out = exec_fn(
-                device_type, device.ip_address, username, password,
-                commands, port, enable_secret, kex_algs, host_key_algs, cipher_algs,
+                device_type, params["host"], params["username"], params["password"],
+                commands, params["port"], params["enable_secret"],
+                params["kex_algs"], params["host_key_algs"], params["cipher_algs"],
                 _log_queue=log_q,
             )
             log_q.put(("__result__", out, None))

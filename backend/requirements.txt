@@ -15,6 +15,7 @@ bcrypt==4.2.0
 # SSH
 netmiko==4.4.0
 paramiko>=3.3.0,<4.0.0
+scp>=0.14.0
 
 # Palo Alto XML API (config export)
 requests>=2.31.0

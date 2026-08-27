@@ -1,3 +1,4 @@
+import time
 import xml.etree.ElementTree as ET
 
 import requests
@@ -79,3 +80,90 @@ def collect_sync(host: str, username: str, password: str, port: int = 443, timeo
     config_xml = _export_running_config_sync(host, api_key, port, timeout)
     info = _get_system_info_sync(host, api_key, port, timeout)
     return {"config": config_xml, **info}
+
+
+def import_config_sync(
+    host: str, api_key: str, filename: str, content: str, port: int, timeout: int
+) -> None:
+    """Config dosyasını PAN-OS'e yükler (GUI'deki Device > Operations >
+    'Import named configuration snapshot' ile aynı API: type=import&category=configuration)."""
+    resp = requests.post(
+        f"https://{host}:{port}/api/",
+        params={"type": "import", "category": "configuration", "key": api_key},
+        files={"file": (filename, content.encode("utf-8"))},
+        verify=False,
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    text = resp.text
+    if text.lstrip().startswith("<response"):
+        root = ET.fromstring(text)
+        if root.get("status") == "error":
+            msg = root.findtext(".//msg") or text[:300]
+            raise RuntimeError(f"Palo Alto config yüklemesi (import) başarısız: {msg}")
+
+
+def load_config_sync(host: str, api_key: str, filename: str, port: int, timeout: int) -> None:
+    """Yüklenen dosyayı candidate config olarak devreye alır
+    (GUI'deki 'Load named configuration snapshot' ile aynı davranış)."""
+    resp = requests.get(
+        f"https://{host}:{port}/api/",
+        params={
+            "type": "op",
+            "cmd": f"<load><config><from>{filename}</from></config></load>",
+            "key": api_key,
+        },
+        verify=False,
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    root = ET.fromstring(resp.text)
+    if root.get("status") == "error":
+        msg = root.findtext(".//msg") or resp.text[:300]
+        raise RuntimeError(f"Palo Alto config yükleme (load) başarısız: {msg}")
+
+
+def commit_sync(host: str, api_key: str, port: int, timeout: int) -> str:
+    """Candidate config'i commit eder, job tamamlanana kadar (~60sn, 2sn aralıklarla) poll eder.
+    Dönüş: commit job'ının sonuç mesajı (audit log için)."""
+    resp = requests.get(
+        f"https://{host}:{port}/api/",
+        params={"type": "commit", "cmd": "<commit></commit>", "key": api_key},
+        verify=False,
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    root = ET.fromstring(resp.text)
+    if root.get("status") == "error":
+        msg = root.findtext(".//msg") or resp.text[:300]
+        raise RuntimeError(f"Palo Alto commit başlatılamadı: {msg}")
+
+    job_id = root.findtext(".//job")
+    if not job_id:
+        # Bazı PAN-OS sürümlerinde değişiklik yoksa commit hemen job üretmeden döner
+        return root.findtext(".//msg/line") or root.findtext(".//msg") or "Commit tamamlandı (değişiklik yoktu)."
+
+    max_attempts = 30
+    for _ in range(max_attempts):
+        time.sleep(2)
+        status_resp = requests.get(
+            f"https://{host}:{port}/api/",
+            params={
+                "type": "op",
+                "cmd": f"<show><jobs><id>{job_id}</id></jobs></show>",
+                "key": api_key,
+            },
+            verify=False,
+            timeout=timeout,
+        )
+        status_resp.raise_for_status()
+        status_root = ET.fromstring(status_resp.text)
+        job_status = status_root.findtext(".//job/status")
+        if job_status == "FIN":
+            result = status_root.findtext(".//job/result")
+            if result != "OK":
+                details = status_root.findtext(".//job/details") or status_resp.text[:300]
+                raise RuntimeError(f"Palo Alto commit başarısız: {details}")
+            return status_root.findtext(".//job/details") or "Commit başarılı."
+
+    raise RuntimeError("Palo Alto commit işlemi zaman aşımına uğradı (job tamamlanmadı).")
