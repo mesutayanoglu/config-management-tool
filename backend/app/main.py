@@ -1,3 +1,4 @@
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,6 +11,19 @@ from app.routers import auth, devices, configs, schedulers, organizations, setti
 from app.services import job_scheduler, configlet_scheduler
 
 
+# Bariz/örnek SECRET_KEY değerleri — bunlardan biriyse ve DB'de kayıtlı değilse
+# otomatik olarak güvenli bir anahtar üretilip DB'ye yazılır (sessizce).
+_PLACEHOLDER_SECRET_KEYS = {
+    "change-me-in-production",
+    "changeme",
+    "change-me",
+    "secret",
+    "secretkey",
+    "your-secret-key",
+    "your-secret-key-here",
+}
+
+
 async def _load_settings_from_db():
     async with engine.begin() as conn:
         await conn.execute(text("""
@@ -20,8 +34,31 @@ async def _load_settings_from_db():
         """))
         result = await conn.execute(text("SELECT key, value FROM site_settings"))
         rows = result.fetchall()
+        row_keys = {row[0] for row in rows}
+
+        if "SECRET_KEY" not in row_keys and app_settings.SECRET_KEY in _PLACEHOLDER_SECRET_KEYS:
+            generated_secret_key = secrets.token_urlsafe(64)
+            insert_result = await conn.execute(
+                text("""
+                    INSERT INTO site_settings (key, value) VALUES (:key, :value)
+                    ON CONFLICT (key) DO NOTHING
+                    RETURNING value
+                """),
+                {"key": "SECRET_KEY", "value": generated_secret_key},
+            )
+            inserted_row = insert_result.fetchone()
+            if inserted_row is not None:
+                app_settings.SECRET_KEY = inserted_row[0]
+            else:
+                # Başka bir process/worker aynı anda üretip yazdı — o değeri kullan.
+                existing = await conn.execute(
+                    text("SELECT value FROM site_settings WHERE key = 'SECRET_KEY'")
+                )
+                app_settings.SECRET_KEY = existing.scalar_one()
     for row in rows:
-        if row[0] == "GITHUB_TOKEN":
+        if row[0] == "SECRET_KEY":
+            app_settings.SECRET_KEY = row[1]
+        elif row[0] == "GITHUB_TOKEN":
             app_settings.GITHUB_TOKEN = row[1]
         elif row[0] == "GITHUB_REPO":
             app_settings.GITHUB_REPO = row[1]
