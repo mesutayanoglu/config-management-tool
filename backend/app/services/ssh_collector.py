@@ -222,6 +222,107 @@ def _ssh_multi_sync(
         raise
 
 
+def build_conn_params(device) -> dict:
+    """Cihazın Netmiko/Paramiko bağlantı parametrelerini tek yerden üretir.
+    credential_profile varsa oradan, yoksa device.ssh_username/ssh_password/22'den alır.
+    `configlet_service.py` ve `restore_strategies/` bu fonksiyonu ortak kullanır
+    (davranış birebir eskiden configlet_service._build_exec_params ile aynıdır)."""
+    vendor = device.vendor.lower()
+
+    if device.credential_profile:
+        p = device.credential_profile
+        conn_type = (p.connection_type or "ssh").lower()
+        username = p.username
+        password = p.password
+        port = p.port
+        enable_secret = p.enable_secret or None
+        kex_algs = json.loads(p.kex_algs) if p.kex_algs else None
+        host_key_algs = json.loads(p.host_key_algs) if p.host_key_algs else None
+        cipher_algs = json.loads(p.cipher_algs) if p.cipher_algs else None
+    else:
+        conn_type = "ssh"
+        username = device.ssh_username
+        password = device.ssh_password
+        port = 22
+        enable_secret = None
+        kex_algs = None
+        host_key_algs = None
+        cipher_algs = None
+
+    if conn_type == "telnet":
+        device_type = VENDOR_DEVICE_TYPE_TELNET.get(vendor, "cisco_ios_telnet")
+        kex_algs = None
+        host_key_algs = None
+        cipher_algs = None
+    else:
+        device_type = VENDOR_DEVICE_TYPE_SSH.get(vendor, "cisco_ios")
+
+    return {
+        "device_type": device_type,
+        "host": device.ip_address,
+        "username": username,
+        "password": password,
+        "port": port,
+        "enable_secret": enable_secret,
+        "kex_algs": kex_algs,
+        "host_key_algs": host_key_algs,
+        "cipher_algs": cipher_algs,
+    }
+
+
+def open_ssh_client_sync(
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    timeout: int = 30,
+    kex_algs: list | None = None,
+    host_key_algs: list | None = None,
+    cipher_algs: list | None = None,
+) -> paramiko.SSHClient:
+    """SCP transferleri için bağlı bir paramiko.SSHClient döndürür.
+    Netmiko'nun kex/host-key/cipher override mantığıyla tutarlı olması için
+    aynı `_kex_lock` ve geçici Transport override deseni kullanılır (bkz. `_ssh_collect_sync`).
+    Çağıran, işi bitince client'ı kapatmakla yükümlüdür."""
+    need_lock = bool(kex_algs or host_key_algs or cipher_algs)
+    saved = {}
+
+    if need_lock:
+        _kex_lock.acquire()
+        if kex_algs:
+            saved["kex"] = paramiko.Transport._preferred_kex
+            paramiko.Transport._preferred_kex = tuple(kex_algs)
+        if host_key_algs:
+            saved["keys"] = paramiko.Transport._preferred_keys
+            paramiko.Transport._preferred_keys = tuple(host_key_algs)
+        if cipher_algs:
+            saved["ciphers"] = paramiko.Transport._preferred_ciphers
+            paramiko.Transport._preferred_ciphers = tuple(cipher_algs)
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        client.connect(
+            hostname=host,
+            port=port,
+            username=username,
+            password=password,
+            timeout=timeout,
+            look_for_keys=False,
+            allow_agent=False,
+        )
+        return client
+    finally:
+        if need_lock:
+            if "kex" in saved:
+                paramiko.Transport._preferred_kex = saved["kex"]
+            if "keys" in saved:
+                paramiko.Transport._preferred_keys = saved["keys"]
+            if "ciphers" in saved:
+                paramiko.Transport._preferred_ciphers = saved["ciphers"]
+            _kex_lock.release()
+
+
 async def _fetch_raw_config(device) -> tuple[str, dict]:
     """Cihaza bağlanıp ham config çıktısını çeker (GitHub'a dokunmaz).
     Dönüş: (output, parsed) — parsed = {"model": ..., "version": ...}."""

@@ -5,3 +5,4 @@ from app.models.scheduler import Scheduler, SchedulerDevice
 from app.models.password_reset_token import PasswordResetToken
 from app.models.credential_profile import CredentialProfile
 from app.models.configlet import Configlet, ConfigletDevice, ConfigletExecution
+from app.models.restore_log import RestoreLog

@@ -59,6 +59,7 @@ export const configsApi = {
   atSha: (deviceUid, sha) => api.get(`/configs/${deviceUid}/at`, { params: { sha } }),
   compare: (deviceUid, shaA, shaB) =>
     api.get(`/configs/${deviceUid}/compare`, { params: { sha_a: shaA, sha_b: shaB } }),
+  restore: (deviceId, sha) => api.post(`/devices/${deviceId}/configs/${sha}/restore`),
 }
 
 export const schedulersApi = {

@@ -249,6 +249,16 @@ const tr = {
   'configs.idleHintNoDevice': 'Sol panelden cihaz seçin',
   'configs.idleSubHint': 'Config açıldıktan sonra "Karşılaştır" ile iki versiyonu yan yana görebilirsiniz.',
   'configs.compareModeHint': 'Orta panelden karşılaştırmak istediğiniz commit\'i seçin.',
+  'configs.btnRestore': 'Bu sürüme dön',
+  'configs.restorePreviewTitle': 'Geri Yükleme Önizleme',
+  'configs.restoreWarning': 'Bu işlem cihazın çalışan konfigürasyonunu seçilen sürüme geri yükleyecek. Mevcut config otomatik olarak yedeklenecektir. Bu işlem cihaz üzerinde geri alınamaz değişiklik yapar.',
+  'configs.restoreConfirmBtn': 'Geri Yükle',
+  'configs.restoreCancelBtn': 'İptal',
+  'deviceRestore.title': 'Restore Başlatıldı',
+  'deviceRestore.stepApplying': 'Cihaza uygulanıyor',
+  'deviceRestore.success': 'Restore başarıyla uygulandı',
+  'deviceRestore.failed': 'Restore başarısız oldu',
+  'deviceRestore.backupInfo': 'Önceki config yedeklendi',
 
   // Organizations Page
   'orgs.title': 'Lokasyonlar',
@@ -834,6 +844,16 @@ const en = {
   'configs.idleHintNoDevice': 'Select a device from the left panel',
   'configs.idleSubHint': 'After opening a config, use "Compare" to view two versions side by side.',
   'configs.compareModeHint': 'Select a commit from the middle panel to compare.',
+  'configs.btnRestore': 'Restore to this version',
+  'configs.restorePreviewTitle': 'Restore Preview',
+  'configs.restoreWarning': 'This will restore the device\'s running configuration to the selected version. The current config will be backed up automatically. This action makes an irreversible change on the device.',
+  'configs.restoreConfirmBtn': 'Restore',
+  'configs.restoreCancelBtn': 'Cancel',
+  'deviceRestore.title': 'Restore Started',
+  'deviceRestore.stepApplying': 'Applying to device',
+  'deviceRestore.success': 'Restore applied successfully',
+  'deviceRestore.failed': 'Restore failed',
+  'deviceRestore.backupInfo': 'Previous config backed up',
 
   // Organizations Page
   'orgs.title': 'Locations',

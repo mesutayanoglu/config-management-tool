@@ -1,11 +1,14 @@
 import { useEffect, useState, useMemo } from 'react'
 import { devicesApi, configsApi, organizationsApi } from '../services/api'
 import { useLanguage } from '../i18n'
+import useAuthStore from '../store/authStore'
 import ConfigViewer from '../components/Configs/ConfigViewer'
 import SideBySideDiff from '../components/Configs/SideBySideDiff'
+import DeviceRestoreModal from '../components/Devices/DeviceRestoreModal'
 
 export default function ConfigsPage() {
   const { t } = useLanguage()
+  const { isReadOnly } = useAuthStore()
   const [devices, setDevices] = useState([])
   const [orgs, setOrgs] = useState([])
   const [sites, setSites] = useState([])
@@ -21,6 +24,11 @@ export default function ConfigsPage() {
   const [compareCommit, setCompareCommit] = useState(null)
   const [diffData, setDiffData] = useState(null)
   const [loading, setLoading] = useState(false)
+
+  const [restoreTarget, setRestoreTarget] = useState(null) // { sha, message, date }
+  const [restoreDiff, setRestoreDiff] = useState(null)     // { contentA, contentB } (contentA=mevcut, contentB=hedef)
+  const [restoreLoading, setRestoreLoading] = useState(false)
+  const [showRestoreExecModal, setShowRestoreExecModal] = useState(false)
 
   useEffect(() => {
     devicesApi.list().then(({ data }) => setDevices(data)).catch(() => {})
@@ -106,6 +114,28 @@ export default function ConfigsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function startRestorePreview(commit) {
+    setPanelMode('restore-preview')
+    setRestoreTarget(commit)
+    setRestoreDiff(null)
+    setRestoreLoading(true)
+    try {
+      const [{ data: latestData }, { data: targetData }] = await Promise.all([
+        configsApi.latest(selectedDevice.device_uid),
+        configsApi.atSha(selectedDevice.device_uid, commit.sha),
+      ])
+      setRestoreDiff({ contentA: latestData.content, contentB: targetData.content })
+    } finally {
+      setRestoreLoading(false)
+    }
+  }
+
+  function cancelRestorePreview() {
+    setPanelMode(viewedCommit ? 'viewing' : 'idle')
+    setRestoreTarget(null)
+    setRestoreDiff(null)
   }
 
   return (
@@ -215,13 +245,26 @@ export default function ConfigsPage() {
                   </div>
                   <p className="text-[11px] text-gray-400">{new Date(c.date).toLocaleString('tr-TR')}</p>
                 </div>
-                {isPicking ? (
-                  isBase
-                    ? <span className="text-[10px] text-gray-400 flex-shrink-0">{t('configs.tagBase')}</span>
-                    : <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded flex-shrink-0">{t('configs.btnSelect')}</span>
-                ) : (
-                  isViewed && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded flex-shrink-0">{t('configs.tagOpen')}</span>
-                )}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {isPicking ? (
+                    isBase
+                      ? <span className="text-[10px] text-gray-400">{t('configs.tagBase')}</span>
+                      : <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{t('configs.btnSelect')}</span>
+                  ) : (
+                    <>
+                      {isViewed && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{t('configs.tagOpen')}</span>}
+                      {!isReadOnly() && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startRestorePreview(c) }}
+                          title={t('configs.btnRestore')}
+                          className="text-[10px] text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded px-1 py-0.5 transition-colors"
+                        >
+                          ↺
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -238,6 +281,11 @@ export default function ConfigsPage() {
                 <code className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded">{diffData.shaA.slice(0, 7)}</code>
                 <span className="text-gray-400">→</span>
                 <code className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded">{diffData.shaB.slice(0, 7)}</code>
+              </>
+            ) : panelMode === 'restore-preview' && restoreTarget ? (
+              <>
+                <span className="text-sm font-semibold text-gray-700">{t('configs.restorePreviewTitle')}</span>
+                <code className="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded">{restoreTarget.sha.slice(0, 7)}</code>
               </>
             ) : viewedCommit ? (
               <>
@@ -285,6 +333,31 @@ export default function ConfigsPage() {
           {!loading && panelMode === 'comparing' && diffData && (
             <SideBySideDiff contentA={diffData.contentA} contentB={diffData.contentB} shaA={diffData.shaA} shaB={diffData.shaB} />
           )}
+          {!loading && panelMode === 'restore-preview' && restoreTarget && (
+            <>
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start justify-between gap-4">
+                <p className="text-xs text-amber-700 font-medium">{t('configs.restoreWarning')}</p>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={cancelRestorePreview}
+                    className="text-xs border border-gray-300 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-50 bg-white whitespace-nowrap">
+                    {t('configs.restoreCancelBtn')}
+                  </button>
+                  <button onClick={() => setShowRestoreExecModal(true)}
+                    className="text-xs px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white whitespace-nowrap">
+                    {t('configs.restoreConfirmBtn')}
+                  </button>
+                </div>
+              </div>
+              {restoreLoading && (
+                <div className="flex items-center justify-center py-10">
+                  <p className="text-sm text-gray-400">{t('common.loading')}</p>
+                </div>
+              )}
+              {!restoreLoading && restoreDiff && (
+                <SideBySideDiff contentA={restoreDiff.contentA} contentB={restoreDiff.contentB} shaA="mevcut" shaB={restoreTarget.sha} />
+              )}
+            </>
+          )}
           {!loading && (panelMode === 'viewing' || panelMode === 'picking') && viewedCommit && (
             <>
               <ConfigViewer content={viewedCommit.content} />
@@ -313,6 +386,15 @@ export default function ConfigsPage() {
           )}
         </div>
       </div>
+
+      {showRestoreExecModal && restoreTarget && (
+        <DeviceRestoreModal
+          device={selectedDevice}
+          targetSha={restoreTarget.sha}
+          onClose={() => { setShowRestoreExecModal(false); setPanelMode('idle'); setRestoreTarget(null); setRestoreDiff(null) }}
+          onDone={() => selectDevice(selectedDevice)}
+        />
+      )}
 
     </div>
   )
