@@ -74,8 +74,12 @@ config-management-tool/
 ```
 backend   → localhost:8000  (FastAPI + Uvicorn --reload)
 frontend  → localhost:80    (Nginx, production build)
-postgres  → localhost:5432
+postgres  → sadece Docker internal network (host'a expose edilmiyor)
 ```
+
+> **Not:** PostgreSQL portu (5432) host makineye açık değildir, güvenlik amacıyla kapatılmıştır.
+> Sadece aynı Docker network'ündeki `backend` servisi `postgres:5432` üzerinden erişebilir.
+> Lokal olarak bağlanmak için: `docker compose exec postgres psql -U <user> <db>` (bkz. README.md).
 
 > **Not:** `celery_worker`, `celery_beat` ve `redis` servisleri kaldırıldı.
 > APScheduler backend process içinde çalışıyor, ayrı worker gerekmez.
