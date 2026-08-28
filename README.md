@@ -146,3 +146,15 @@ Veritabanı verilerini de silmek istersen:
 ```bash
 docker compose down -v
 ```
+
+---
+
+## Lokal veritabanına bağlanma
+
+PostgreSQL portu host makineye açık değildir (sadece `backend` servisiyle aynı Docker network'ü üzerinden erişilebilir). Lokal olarak veritabanına bağlanmak isterseniz container içindeki `psql`'i kullanın:
+
+```bash
+docker compose exec postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-configdb}
+```
+
+`.env` dosyanızda `POSTGRES_USER` / `POSTGRES_DB` değerlerini değiştirdiyseniz komuttaki değerleri de ona göre güncelleyin.
