@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -26,7 +27,14 @@ from app.services.ssh_collector import collect_config, collect_config_stream
 router = APIRouter()
 
 
+# Bazı vendor entegrasyonları (ör. Palo Alto XML API) kimlik bilgilerini URL query
+# parametresi olarak gönderiyor; bağlantı hatası mesajları tam URL'i içerebilir.
+# Bu, DB'ye (RestoreLog.error) veya HTTP response body'sine sızmasın diye maskelenir.
+_SECRET_PARAM_RE = re.compile(r"((?:password|key)=)[^&\s'\"]*", re.IGNORECASE)
+
+
 def _collect_error_detail(msg: str) -> str:
+    msg = _SECRET_PARAM_RE.sub(r"\1***", msg)
     if "401" in msg or "Bad credentials" in msg:
         return "GitHub token geçersiz. Ayarlar sayfasından token'ı güncelleyin."
     if "403" in msg or "not accessible" in msg:
@@ -349,7 +357,7 @@ async def restore_config(
             target_commit_message=target_commit_message,
             backup_sha=backup_sha,
             status="failed",
-            error=str(exc)[:500],
+            error=detail[:500],
             started_at=started_at,
             duration_ms=_duration_ms(),
         ))
