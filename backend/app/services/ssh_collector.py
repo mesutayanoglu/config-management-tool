@@ -1,4 +1,5 @@
 import asyncio
+import difflib
 import json
 import threading
 from functools import partial
@@ -322,13 +323,30 @@ async def collect_config_stream(device):
         github_path = await github.commit_config(
             device.device_uid, device.hostname, device.ip_address, device.vendor, output
         )
-        changed = old_content is not None and old_content.strip() != output.strip()
+        is_first_backup = old_content is None
+        changed = (not is_first_backup) and (old_content.strip() != output.strip())
+
+        diff_line_count = 0
+        if changed:
+            diff = difflib.unified_diff(
+                old_content.strip().splitlines(),
+                output.strip().splitlines(),
+                lineterm="",
+            )
+            diff_line_count = sum(
+                1 for line in diff
+                if (line.startswith("+") or line.startswith("-"))
+                and not line.startswith("+++")
+                and not line.startswith("---")
+            )
 
         yield {
             "type": "done",
             "status": "success",
             "github_path": github_path,
             "changed": changed,
+            "is_first_backup": is_first_backup,
+            "diff_line_count": diff_line_count,
             "old_content": old_content or "",
             "new_content": output,
             **parsed,

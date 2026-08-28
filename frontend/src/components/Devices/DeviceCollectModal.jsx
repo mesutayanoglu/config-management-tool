@@ -145,7 +145,15 @@ export default function DeviceCollectModal({ device, onClose, onDone }) {
                   {[done.model, done.version].filter(Boolean).join(' · ')}
                 </p>
               )}
-              {done.changed === false && (
+              {done.is_first_backup === true && (
+                <p className="text-xs text-emerald-600 mt-0.5">{t('deviceCollect.firstBackup')}</p>
+              )}
+              {done.is_first_backup !== true && done.changed === true && (
+                <p className="text-xs text-emerald-600 mt-0.5">
+                  {t('deviceCollect.changed').replace('{count}', String(done.diff_line_count))}
+                </p>
+              )}
+              {done.is_first_backup !== true && done.changed === false && (
                 <p className="text-xs text-emerald-600 mt-0.5">{t('deviceCollect.unchanged')}</p>
               )}
             </div>
