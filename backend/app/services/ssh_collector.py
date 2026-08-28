@@ -306,7 +306,33 @@ async def _fetch_raw_config(device) -> tuple[str, dict]:
             f"{stripped[:300]}"
         )
 
-    return output, parse_model_version(device.vendor, output)
+    # Cisco: model/versiyon bilgisi running-config'te güvenilir şekilde
+    # bulunmaz (bu bilgi 'show version' çıktısındadır). Best-effort ek
+    # sorgu — başarısız olursa ana yedekleme akışı asla etkilenmemeli.
+    version_output = None
+    if vendor == "cisco":
+        try:
+            version_output = await loop.run_in_executor(
+                None,
+                partial(
+                    _ssh_collect_sync,
+                    device_type,
+                    device.ip_address,
+                    username,
+                    password,
+                    "show version",
+                    30,
+                    port,
+                    enable_secret,
+                    kex_algs,
+                    host_key_algs,
+                    cipher_algs,
+                ),
+            )
+        except Exception:
+            version_output = None
+
+    return output, parse_model_version(device.vendor, output, version_output)
 
 
 async def collect_config_stream(device):
