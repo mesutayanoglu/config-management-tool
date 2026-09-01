@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { configsApi } from '../../services/api'
+import useAuthStore from '../../store/authStore'
 import { useLanguage } from '../../i18n'
 
 function StepIcon({ state }) {
@@ -34,15 +34,31 @@ function StepIcon({ state }) {
   return <span className="w-5 h-5 rounded-full border-2 border-gray-200 flex-shrink-0" />
 }
 
+// Adım sırası: backing_up → backed_up → applying → applied → verifying → done
+const STEP_ORDER = ['backup', 'apply', 'verify']
+
 export default function DeviceRestoreModal({ device, targetSha, onClose, onDone }) {
   const { t } = useLanguage()
+  const token = useAuthStore.getState().token
 
-  const [status, setStatus] = useState('running') // 'running' | 'success' | 'failed'
-  const [result, setResult] = useState(null)
-  const [errorMsg, setErrorMsg] = useState('')
+  const [reached, setReached] = useState({ backup: false, apply: false, verify: false })
+  const [done, setDone] = useState(null) // { status: 'success'|'failed', error?, warning?, backup_sha? }
+  const [connError, setConnError] = useState('')
   const startedRef = useRef(false)
 
-  const stepState = status === 'success' ? 'done' : status === 'failed' ? 'error' : 'active'
+  const failedAt = done?.status === 'failed'
+    ? (!reached.backup ? 'backup' : !reached.apply ? 'apply' : 'verify')
+    : null
+
+  function stepState(step) {
+    if (done?.status === 'success') return 'done'
+    if (failedAt === step) return 'error'
+    if (reached[step]) return 'done'
+    const idx = STEP_ORDER.indexOf(step)
+    const activeIdx = STEP_ORDER.findIndex((s) => !reached[s])
+    if (!done && idx === activeIdx) return 'active'
+    return 'pending'
+  }
 
   useEffect(() => {
     if (startedRef.current) return
@@ -50,12 +66,46 @@ export default function DeviceRestoreModal({ device, targetSha, onClose, onDone 
 
     async function run() {
       try {
-        const { data } = await configsApi.restore(device.id, targetSha)
-        setResult(data)
-        setStatus('success')
+        const resp = await fetch(`/api/devices/${device.id}/configs/${targetSha}/restore-stream`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!resp.ok || !resp.body) {
+          const errData = await resp.json().catch(() => ({}))
+          setDone({ status: 'failed', error: errData.detail || t('deviceRestore.failed') })
+          return
+        }
+
+        const reader = resp.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
+
+        while (true) {
+          const { done: streamDone, value } = await reader.read()
+          if (streamDone) break
+
+          buf += decoder.decode(value, { stream: true })
+          const parts = buf.split('\n\n')
+          buf = parts.pop()
+
+          for (const part of parts) {
+            const line = part.trim()
+            if (!line.startsWith('data: ')) continue
+            try {
+              const ev = JSON.parse(line.slice(6))
+              if (ev.type === 'backed_up') setReached((r) => ({ ...r, backup: true }))
+              else if (ev.type === 'applied') setReached((r) => ({ ...r, apply: true }))
+              else if (ev.type === 'done') {
+                if (ev.status === 'success') setReached({ backup: true, apply: true, verify: true })
+                setDone(ev)
+              }
+            } catch (_) {}
+          }
+        }
       } catch (err) {
-        setErrorMsg(err.response?.data?.detail || t('deviceRestore.failed'))
-        setStatus('failed')
+        setConnError(String(err))
+        setDone({ status: 'failed', error: t('deviceRestore.failed') })
       }
     }
 
@@ -64,9 +114,9 @@ export default function DeviceRestoreModal({ device, targetSha, onClose, onDone 
   }, [])
 
   useEffect(() => {
-    if (status === 'success') onDone?.()
+    if (done?.status === 'success') onDone?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status])
+  }, [done])
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60">
@@ -81,30 +131,42 @@ export default function DeviceRestoreModal({ device, targetSha, onClose, onDone 
         {/* Steps */}
         <div className="px-5 py-5 space-y-4">
           <div className="flex items-center gap-3">
-            <StepIcon state={stepState} />
-            <span className={`text-sm ${stepState === 'error' ? 'text-red-600' : 'text-gray-700'}`}>
+            <StepIcon state={stepState('backup')} />
+            <span className={`text-sm ${stepState('backup') === 'error' ? 'text-red-600' : stepState('backup') === 'pending' ? 'text-gray-400' : 'text-gray-700'}`}>
+              {t('deviceRestore.stepBackup')}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <StepIcon state={stepState('apply')} />
+            <span className={`text-sm ${stepState('apply') === 'error' ? 'text-red-600' : stepState('apply') === 'pending' ? 'text-gray-400' : 'text-gray-700'}`}>
               {t('deviceRestore.stepApplying')}
             </span>
           </div>
+          <div className="flex items-center gap-3">
+            <StepIcon state={stepState('verify')} />
+            <span className={`text-sm ${stepState('verify') === 'error' ? 'text-red-600' : stepState('verify') === 'pending' ? 'text-gray-400' : 'text-gray-700'}`}>
+              {t('deviceRestore.stepVerify')}
+            </span>
+          </div>
 
-          {status === 'success' && (
+          {done?.status === 'success' && (
             <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
               <p className="text-sm font-medium text-emerald-700">{t('deviceRestore.success')}</p>
-              {result?.backup_sha && (
+              {done?.backup_sha && (
                 <p className="text-xs text-emerald-600 mt-0.5">
-                  {t('deviceRestore.backupInfo')}: {result.backup_sha.slice(0, 7)}
+                  {t('deviceRestore.backupInfo')}: {done.backup_sha.slice(0, 7)}
                 </p>
               )}
-              {result?.warning && (
-                <p className="text-xs text-amber-600 mt-0.5">{result.warning}</p>
+              {done?.warning && (
+                <p className="text-xs text-amber-600 mt-0.5">{done.warning}</p>
               )}
             </div>
           )}
 
-          {status === 'failed' && (
+          {done?.status === 'failed' && (
             <div className="mt-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
               <p className="text-sm font-medium text-red-700">{t('deviceRestore.failed')}</p>
-              <p className="text-xs text-red-600 mt-0.5 break-words">{errorMsg}</p>
+              <p className="text-xs text-red-600 mt-0.5 break-words">{done.error || connError}</p>
             </div>
           )}
         </div>
@@ -113,7 +175,7 @@ export default function DeviceRestoreModal({ device, targetSha, onClose, onDone 
         <div className="px-5 py-3.5 border-t border-gray-100 flex justify-end">
           <button
             onClick={onClose}
-            disabled={status === 'running'}
+            disabled={!done}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {t('common.close')}

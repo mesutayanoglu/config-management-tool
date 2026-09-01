@@ -1,5 +1,5 @@
 from app.services.restore_strategies.base import BaseRestoreStrategy
-from app.services.restore_strategies.cisco_ios import CiscoIosRestoreStrategy
+from app.services.restore_strategies.cisco_ios import CiscoIosRestoreStrategy, SCP_AUTO_ENABLED_MARKER
 from app.services.restore_strategies.aruba_cx import ArubaCxRestoreStrategy
 from app.services.restore_strategies.huawei import HuaweiRestoreStrategy, HUAWEI_REBOOT_WARNING
 from app.services.restore_strategies.fortigate import FortiGateRestoreStrategy

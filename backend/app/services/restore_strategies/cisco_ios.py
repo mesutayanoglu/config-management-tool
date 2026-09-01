@@ -8,23 +8,25 @@ from scp import SCPClient
 from app.services.restore_strategies.base import BaseRestoreStrategy
 from app.services.ssh_collector import build_conn_params, open_ssh_client_sync
 
+SCP_AUTO_ENABLED_MARKER = "[SCP-AUTO]"
+
+
+def _ensure_scp_server_enabled(conn) -> str | None:
+    """Cihazda 'ip scp server enable' yoksa açar. SCP olmadan restore'un
+    dosya transfer adımı 'Administratively disabled.' hatasıyla başarısız olur.
+    Dönüş: otomatik açıldıysa log satırı, zaten açıksa None."""
+    check = conn.send_command("show running-config | include ip scp server enable", read_timeout=30)
+    if check.strip():
+        return None
+
+    conn.send_config_set(["ip scp server enable"], read_timeout=30)
+    return f"{SCP_AUTO_ENABLED_MARKER} 'ip scp server enable' kapalıydı, restore öncesi otomatik açıldı."
+
 
 def _cisco_restore_sync(params: dict, config_content: str) -> str:
     ssh_client = None
     conn = None
     try:
-        ssh_client = open_ssh_client_sync(
-            params["host"], params["port"], params["username"], params["password"],
-            30, params["kex_algs"], params["host_key_algs"], params["cipher_algs"],
-        )
-
-        scp = SCPClient(ssh_client.get_transport())
-        try:
-            buf = io.BytesIO(config_content.encode("utf-8"))
-            scp.putfo(buf, "flash:restore-config.txt")
-        finally:
-            scp.close()
-
         conn_params = {
             "device_type": "cisco_ios",
             "host": params["host"],
@@ -44,6 +46,20 @@ def _cisco_restore_sync(params: dict, config_content: str) -> str:
         if not conn.check_enable_mode():
             conn.enable()
 
+        scp_log = _ensure_scp_server_enabled(conn)
+
+        ssh_client = open_ssh_client_sync(
+            params["host"], params["port"], params["username"], params["password"],
+            30, params["kex_algs"], params["host_key_algs"], params["cipher_algs"],
+        )
+
+        scp = SCPClient(ssh_client.get_transport())
+        try:
+            buf = io.BytesIO(config_content.encode("utf-8"))
+            scp.putfo(buf, "flash:restore-config.txt")
+        finally:
+            scp.close()
+
         output = conn.send_command_timing(
             "configure replace flash:restore-config.txt force", read_timeout=60
         )
@@ -53,6 +69,9 @@ def _cisco_restore_sync(params: dict, config_content: str) -> str:
 
         conn.disconnect()
         ssh_client.close()
+
+        if scp_log:
+            output = f"{scp_log}\n\n{output}"
         return output
 
     except Exception:

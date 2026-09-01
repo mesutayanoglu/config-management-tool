@@ -2,77 +2,100 @@ import { Handle, Position } from '@xyflow/react'
 import { useLanguage } from '../../i18n'
 
 const VENDOR_COLORS = {
-  cisco:     { bg: 'bg-blue-50',   border: 'border-blue-400',  selBorder: 'border-blue-600',  text: 'text-blue-700',  badge: 'bg-blue-100 text-blue-700' },
-  fortigate: { bg: 'bg-red-50',    border: 'border-red-400',   selBorder: 'border-red-600',   text: 'text-red-700',   badge: 'bg-red-100 text-red-700' },
-  huawei:    { bg: 'bg-rose-50',   border: 'border-rose-400',  selBorder: 'border-rose-600',  text: 'text-rose-700',  badge: 'bg-rose-100 text-rose-700' },
-  aruba:     { bg: 'bg-orange-50', border: 'border-orange-400',selBorder: 'border-orange-600',text: 'text-orange-700',badge: 'bg-orange-100 text-orange-700' },
-  aruba_cx:  { bg: 'bg-amber-50',  border: 'border-amber-400', selBorder: 'border-amber-600', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' },
-  paloalto:  { bg: 'bg-emerald-50', border: 'border-emerald-400', selBorder: 'border-emerald-600', text: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
+  cisco:     '#2563eb',
+  fortigate: '#dc2626',
+  huawei:    '#e11d48',
+  aruba:     '#ea580c',
+  aruba_cx:  '#d97706',
+  paloalto:  '#059669',
 }
 
-function VendorIcon({ vendor }) {
-  if (!vendor) {
-    return (
-      <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25zm.75-12h9v9h-9v-9z" />
-      </svg>
-    )
-  }
+// Firewall/gateway rolündeki vendor'lar daire (router tarzı) sembolle, geri kalanı
+// kare (switch tarzı) sembolle çizilir — klasik ağ diyagramı stencil kuralı.
+const FIREWALL_VENDORS = new Set(['fortigate', 'paloalto'])
+const ICON_SIZE = 56
+
+// Kare çerçeve içinde çapraz çift-yön ok — switch stencili.
+function SwitchGlyph({ color }) {
   return (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h14a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7 11h2v2H7zM11 11h2v2h-2zM15 11h2v2h-2z" />
+    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 56 56" fill="none">
+      <rect x="2" y="2" width="52" height="52" rx="6" fill="white" stroke={color} strokeWidth="2.5" />
+      <g stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 20h22M36 20l-6-6M36 20l-6 6" />
+        <path d="M42 36H20M20 36l6-6M20 36l6 6" />
+      </g>
     </svg>
   )
 }
+
+// Daire içinde 8 yönlü ışınsal ok — router/firewall (gateway) stencili.
+function GatewayGlyph({ color }) {
+  const rays = Array.from({ length: 8 }, (_, i) => (i * 360) / 8)
+  return (
+    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 56 56" fill="none">
+      <circle cx="28" cy="28" r="26" fill="white" stroke={color} strokeWidth="2.5" />
+      <g stroke={color} strokeWidth="2.2" strokeLinecap="round">
+        {rays.map((deg) => (
+          <line
+            key={deg}
+            x1="28" y1="28"
+            x2={28 + 15 * Math.cos((deg * Math.PI) / 180)}
+            y2={28 + 15 * Math.sin((deg * Math.PI) / 180)}
+            transform={`rotate(${deg} 28 28)`}
+          />
+        ))}
+      </g>
+      <circle cx="28" cy="28" r="3" fill={color} />
+    </svg>
+  )
+}
+
+function UnknownGlyph() {
+  return (
+    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 56 56" fill="none">
+      <rect x="2" y="2" width="52" height="52" rx="6" fill="white" stroke="#94a3b8" strokeWidth="2.5" strokeDasharray="5 4" />
+      <text x="28" y="35" textAnchor="middle" fontSize="22" fill="#94a3b8" fontWeight="600">?</text>
+    </svg>
+  )
+}
+
+const dot = '!bg-slate-400 !w-2 !h-2 !border-white !border-2'
 
 export default function TopologyNode({ data, selected }) {
   const { t } = useLanguage()
   const { hostname, ip, vendor, known } = data
 
-  const style = vendor
-    ? (VENDOR_COLORS[vendor.toLowerCase()] || VENDOR_COLORS.cisco)
-    : null
-
-  if (!known) {
-    return (
-      <div className={`relative bg-slate-50 border-2 border-dashed rounded-xl px-4 py-3 min-w-[160px] shadow-sm transition-all ${
-        selected ? 'border-slate-500 shadow-md ring-2 ring-slate-400 ring-offset-1' : 'border-slate-300'
-      }`}>
-        <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-2 !h-2" />
-        <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-2 !h-2" />
-        <Handle type="target" position={Position.Left} className="!bg-slate-400 !w-2 !h-2" />
-        <Handle type="source" position={Position.Right} className="!bg-slate-400 !w-2 !h-2" />
-        <div className="flex items-center gap-2 mb-1">
-          <VendorIcon vendor={null} />
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-            {t('topology.unknownDevice')}
-          </span>
-        </div>
-        <p className="text-sm font-medium text-slate-600 truncate max-w-[160px]" title={hostname}>{hostname}</p>
-        <p className="text-xs text-slate-400 font-mono">{ip}</p>
-      </div>
-    )
-  }
+  const color = vendor ? (VENDOR_COLORS[vendor.toLowerCase()] || VENDOR_COLORS.cisco) : '#94a3b8'
+  const isFirewall = vendor && FIREWALL_VENDORS.has(vendor.toLowerCase())
 
   return (
-    <div className={`relative ${style.bg} border-2 rounded-xl px-4 py-3 min-w-[160px] shadow-sm transition-all ${
-      selected ? `${style.selBorder} shadow-md ring-2 ring-offset-1 ring-blue-400` : style.border
-    }`}>
-      <Handle type="target" position={Position.Top} className="!bg-blue-400 !w-2 !h-2" />
-      <Handle type="source" position={Position.Bottom} className="!bg-blue-400 !w-2 !h-2" />
-      <Handle type="target" position={Position.Left} className="!bg-blue-400 !w-2 !h-2" />
-      <Handle type="source" position={Position.Right} className="!bg-blue-400 !w-2 !h-2" />
-      <div className="flex items-center gap-2 mb-1">
-        <span className={style.text}><VendorIcon vendor={vendor} /></span>
-        {vendor && (
-          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${style.badge} uppercase`}>
-            {vendor}
-          </span>
-        )}
+    <div className="relative flex flex-col items-center" style={{ width: ICON_SIZE + 8 }}>
+      <Handle type="target" position={Position.Top} className={dot} />
+      <Handle type="source" position={Position.Bottom} className={dot} />
+      <Handle type="target" position={Position.Left} className={dot} />
+      <Handle type="source" position={Position.Right} className={dot} />
+
+      <div
+        className={`rounded-xl transition-all ${selected ? 'ring-2 ring-offset-2' : ''}`}
+        style={selected ? { '--tw-ring-color': color } : undefined}
+      >
+        {!known ? <UnknownGlyph /> : isFirewall ? <GatewayGlyph color={color} /> : <SwitchGlyph color={color} />}
       </div>
-      <p className="text-sm font-semibold text-gray-800 truncate max-w-[160px]" title={hostname}>{hostname}</p>
-      <p className="text-xs text-slate-500 font-mono">{ip}</p>
+
+      <div className="mt-1.5 text-center max-w-[110px]">
+        {known && vendor && (
+          <p className="text-[9px] font-bold uppercase tracking-wider leading-tight" style={{ color }}>
+            {vendor}
+          </p>
+        )}
+        {!known && (
+          <p className="text-[9px] font-bold uppercase tracking-wider leading-tight text-slate-400">
+            {t('topology.unknownDevice')}
+          </p>
+        )}
+        <p className="text-xs font-semibold text-gray-800 truncate" title={hostname}>{hostname}</p>
+        <p className="text-[10px] text-slate-400 font-mono truncate">{ip}</p>
+      </div>
     </div>
   )
 }

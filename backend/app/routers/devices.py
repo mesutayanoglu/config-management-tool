@@ -21,7 +21,7 @@ from app.models.user import User
 from app.schemas.device import DeviceCreate, DeviceOut, DeviceUpdate
 from app.services.github_service import github_service as github
 from app.services.ping_service import ping_device
-from app.services.restore_strategies import get_restore_strategy, HUAWEI_REBOOT_WARNING
+from app.services.restore_strategies import get_restore_strategy, HUAWEI_REBOOT_WARNING, SCP_AUTO_ENABLED_MARKER
 from app.services.ssh_collector import collect_config, collect_config_stream
 
 router = APIRouter()
@@ -367,6 +367,12 @@ async def restore_config(
     warning_parts: list[str] = []
     if "[UYARI]" in restore_log_output:
         warning_parts.append(HUAWEI_REBOOT_WARNING)
+    if SCP_AUTO_ENABLED_MARKER in restore_log_output:
+        scp_line = next(
+            (l for l in restore_log_output.splitlines() if SCP_AUTO_ENABLED_MARKER in l), None
+        )
+        if scp_line:
+            warning_parts.append(scp_line.replace(SCP_AUTO_ENABLED_MARKER, "").strip())
 
     # 4) Doğrulama: cihazın restore sonrası running-config'ini tekrar çek + commit et.
     #    Bu adım başarısız olsa bile restore işlemi BAŞARISIZ SAYILMAZ (cihaz zaten değişti).
@@ -405,3 +411,151 @@ async def restore_config(
         "backup_sha": backup_sha,
         "warning": " ".join(warning_parts) if warning_parts else None,
     }
+
+
+@router.post("/{device_id}/configs/{commit_sha}/restore-stream")
+async def restore_config_stream(
+    device_id: int,
+    commit_sha: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_write_user),
+):
+    """SSE: restore'u adım adım yollar (backing_up/backed_up/applying/applied/verifying/done).
+    DB yazımları (RestoreLog, device.model/version) stream bitince tek seferde yapılır —
+    collect-stream ile aynı desen (bkz. yukarısı)."""
+    result = await db.execute(
+        select(Device).options(selectinload(Device.credential_profile))
+        .where(Device.id == device_id)
+    )
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cihaz bulunamadı")
+
+    content = await github.get_config(device.device_uid, commit_sha)
+    if content is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Config bulunamadı")
+
+    strategy = get_restore_strategy(device.vendor)
+    if strategy is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Bu cihaz vendor'ı için restore desteklenmiyor",
+        )
+
+    device_id_snap, hostname_snap, ip_snap = device.id, device.hostname, device.ip_address
+    user_id_snap, username_snap = current_user.id, current_user.username
+
+    async def generate():
+        started_at = datetime.now(ZoneInfo("Europe/Istanbul")).replace(tzinfo=None)
+        start_ts = datetime.now(timezone.utc)
+
+        def duration_ms() -> int:
+            return int((datetime.now(timezone.utc) - start_ts).total_seconds() * 1000)
+
+        async def save_log(**kwargs):
+            async with AsyncSessionLocal() as save_db:
+                save_db.add(RestoreLog(
+                    device_id=device_id_snap,
+                    device_hostname=hostname_snap,
+                    device_ip=ip_snap,
+                    triggered_by_id=user_id_snap,
+                    triggered_by_username=username_snap,
+                    started_at=started_at,
+                    duration_ms=duration_ms(),
+                    **kwargs,
+                ))
+                await save_db.commit()
+
+        def emit(event: dict) -> str:
+            return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+        # 1) Ön yedekleme: cihaza dokunmadan önce mevcut running-config'i GitHub'a yedekle.
+        yield emit({"type": "backing_up"})
+        try:
+            await collect_config(device)
+        except Exception as exc:
+            detail = _collect_error_detail(str(exc))
+            await save_log(
+                target_sha=commit_sha, target_commit_message=None, backup_sha=None,
+                status="failed", error=f"Ön yedekleme başarısız: {detail}"[:500],
+            )
+            yield emit({
+                "type": "done", "status": "failed",
+                "error": f"Mevcut config yedeklenemediği için restore iptal edildi: {detail}",
+            })
+            return
+        yield emit({"type": "backed_up"})
+
+        configs = await github.list_configs(device.device_uid)
+        backup_sha = configs[0]["sha"] if configs else None
+        target_commit_message = next(
+            (c["message"] for c in configs if c["sha"] == commit_sha), None
+        )
+
+        # 2) Config'i cihaza uygula.
+        yield emit({"type": "applying"})
+        try:
+            restore_log_output = await strategy.restore(device, content)
+        except Exception as exc:
+            detail = _collect_error_detail(str(exc))
+            await save_log(
+                target_sha=commit_sha, target_commit_message=target_commit_message,
+                backup_sha=backup_sha, status="failed", error=detail[:500],
+            )
+            yield emit({"type": "done", "status": "failed", "error": detail})
+            return
+
+        warning_parts: list[str] = []
+        if "[UYARI]" in restore_log_output:
+            warning_parts.append(HUAWEI_REBOOT_WARNING)
+        if SCP_AUTO_ENABLED_MARKER in restore_log_output:
+            scp_line = next(
+                (l for l in restore_log_output.splitlines() if SCP_AUTO_ENABLED_MARKER in l), None
+            )
+            if scp_line:
+                warning_parts.append(scp_line.replace(SCP_AUTO_ENABLED_MARKER, "").strip())
+        yield emit({"type": "applied", "warning": " ".join(warning_parts) if warning_parts else None})
+
+        # 3) Doğrulama: cihazın restore sonrası running-config'ini tekrar çek + commit et.
+        #    Bu adım başarısız olsa bile restore işlemi BAŞARISIZ SAYILMAZ (cihaz zaten değişti).
+        yield emit({"type": "verifying"})
+        model = version = None
+        try:
+            post_result = await collect_config(device)
+            model, version = post_result.get("model"), post_result.get("version")
+        except Exception as exc:
+            warning_parts.append(
+                f"Restore uygulandı ancak doğrulama yedeği alınamadı: {_collect_error_detail(str(exc))}"
+            )
+
+        await save_log(
+            target_sha=commit_sha, target_commit_message=target_commit_message,
+            backup_sha=backup_sha, status="success", error=None,
+        )
+
+        try:
+            async with AsyncSessionLocal() as save_db:
+                r = await save_db.execute(select(Device).where(Device.id == device_id_snap))
+                dev = r.scalar_one_or_none()
+                if dev:
+                    if model:
+                        dev.model = model
+                    if version:
+                        dev.version = version
+                    dev.last_collected_at = datetime.now(timezone.utc)
+                    await save_db.commit()
+        except Exception:
+            pass  # cihaz güncellemesi başarısız olsa bile restore zaten başarılı sayıldı
+
+        yield emit({
+            "type": "done", "status": "success",
+            "restored_from": commit_sha,
+            "backup_sha": backup_sha,
+            "warning": " ".join(warning_parts) if warning_parts else None,
+        })
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
